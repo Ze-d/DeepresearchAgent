@@ -22,6 +22,10 @@
 - [TDD Guide](testing/tdd-guide.md)
 - [Test Data](testing/test-data.md)
 
+## Workflows (工作流)
+
+- [Workflows Overview](workflows/README.md)
+
 ## AI (AI 协作)
 
 - [Coding Rules](ai/coding-rules.md)
