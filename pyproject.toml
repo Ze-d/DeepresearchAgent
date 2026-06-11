@@ -1,0 +1,35 @@
+[project]
+name = "deepresearch-agent"
+version = "0.1.0"
+description = "A LangGraph-based DeepResearch Agent powered by DeepSeek API"
+requires-python = ">=3.11"
+dependencies = [
+    "langchain",
+    "langgraph",
+    "langchain-deepseek",
+    "typer",
+    "pydantic",
+    "pydantic-settings",
+    "python-dotenv",
+    "duckduckgo-search",
+    "trafilatura",
+    "beautifulsoup4",
+    "httpx",
+    "rich",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "ruff",
+    "mypy",
+]
+
+[project.scripts]
+deepresearch = "deepresearch.cli:app"
+
+[tool.ruff]
+line-length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
