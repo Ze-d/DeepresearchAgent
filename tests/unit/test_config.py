@@ -11,6 +11,8 @@ def test_settings_from_env(monkeypatch):
     monkeypatch.setenv("OUTPUT_DIR", "my_outputs")
     monkeypatch.setenv("TEMPERATURE", "0.5")
     monkeypatch.setenv("MAX_RETRIES", "3")
+    monkeypatch.setenv("SEARCH_PROVIDER", "tavily")
+    monkeypatch.setenv("TAVILY_API_KEY", "sk-tavily-test")
 
     s = Settings()
 
@@ -21,6 +23,8 @@ def test_settings_from_env(monkeypatch):
     assert s.output_dir == "my_outputs"
     assert s.temperature == 0.5
     assert s.max_retries == 3
+    assert s.search_provider == "tavily"
+    assert s.tavily_api_key == "sk-tavily-test"
 
 
 def test_settings_defaults(monkeypatch):

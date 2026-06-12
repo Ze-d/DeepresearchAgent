@@ -33,3 +33,4 @@
 - [Review Checklist](ai/review-checklist.md)
 - [Claude Code Execution Plan](ai/06_claude_code_execution_plan.md)
 - [v0 Execution Plan](ai/v0_execution_plan.md)
+- [v0 MVP 实施计划 (2026-06-12)](superpowers/plans/2026-06-12-v0-mvp.md)

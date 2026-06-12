@@ -1,0 +1,107 @@
+# deepresearch/nodes/research.py
+import json
+import logging
+import re
+import uuid
+
+from langchain_core.language_models import BaseChatModel
+
+from deepresearch.state import AgentState
+from deepresearch.tools import search_web, fetch_content
+from deepresearch.prompts import build_researcher_messages
+from deepresearch.config import Settings
+
+logger = logging.getLogger(__name__)
+
+
+def _extract_evidences(sub_question: str, source_content: str, llm: BaseChatModel) -> list[dict]:
+    """用 LLM 从 source content 中抽取 evidence 列表。"""
+    messages = build_researcher_messages(sub_question, source_content)
+    response = llm.invoke(messages)
+    raw = str(response.content) if hasattr(response, "content") else str(response)
+
+    match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", raw, re.DOTALL)
+    if match:
+        raw = match.group(1).strip()
+
+    try:
+        data = json.loads(raw)
+        return data.get("evidences", [])
+    except json.JSONDecodeError:
+        logger.warning("Failed to parse evidence JSON: %s", raw[:200])
+        return []
+
+
+def make_research_node(llm: BaseChatModel):
+    """创建 research_node（闭包注入 LLM）。"""
+
+    def research_node(state: AgentState) -> dict:
+        plan = state.get("research_plan")
+        if plan is None:
+            return {
+                "status": "error",
+                "errors": ["No research plan found. Run plan node first."],
+            }
+
+        cfg = Settings()
+        all_sources: list[dict] = []
+        all_evidences: list[dict] = []
+        all_search_results: list[dict] = []
+
+        sub_questions = plan.get("sub_questions", [])
+        sorted_qs = sorted(sub_questions, key=lambda q: q.get("priority", 99))
+
+        for sq in sorted_qs:
+            queries = sq.get("search_queries", [])
+            for query in queries[:2]:
+                logger.info("Searching: %s", query)
+                results = search_web(query, max_results=cfg.max_search_results)
+                for r in results:
+                    source_id = str(uuid.uuid4())[:8]
+                    source_dict = {
+                        "id": source_id,
+                        "title": r.title,
+                        "url": r.url,
+                        "snippet": r.snippet,
+                        "content": None,
+                        "source_type": "web",
+                        "score": 0.5,
+                    }
+                    content = fetch_content(r.url)
+                    if content:
+                        source_dict["content"] = content
+                        evidences = _extract_evidences(
+                            sq.get("question", ""), content, llm
+                        )
+                        for ev in evidences:
+                            ev["id"] = str(uuid.uuid4())[:8]
+                            ev["source_id"] = source_id
+                            all_evidences.append(ev)
+
+                    all_sources.append(source_dict)
+                    all_search_results.append({
+                        "query": query,
+                        "url": r.url,
+                        "title": r.title,
+                    })
+
+        logger.info("Research done: %d sources, %d evidences", len(all_sources), len(all_evidences))
+
+        return {
+            "search_results": state.get("search_results", []) + all_search_results,
+            "sources": state.get("sources", []) + all_sources,
+            "evidences": state.get("evidences", []) + all_evidences,
+            "status": "researched",
+        }
+
+    return research_node
+
+
+# Backward-compatible module-level alias for __init__.py / graph.py
+# These import "research_node" directly (not via make_research_node).
+def research_node(state: AgentState) -> dict:
+    """Backward-compatible entry point (uses default LLM from build_llm())."""
+    from deepresearch.llm import build_llm
+
+    llm = build_llm()
+    return make_research_node(llm)(state)

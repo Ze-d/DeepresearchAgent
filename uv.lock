@@ -250,7 +250,7 @@ wheels = [
 [[package]]
 name = "deepresearch-agent"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "beautifulsoup4" },
     { name = "duckduckgo-search" },
@@ -299,6 +299,13 @@ requires-dist = [
     { name = "typer" },
 ]
 provides-extras = ["dev"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "mypy" },
+    { name = "pytest" },
+    { name = "ruff" },
+]
 
 [[package]]
 name = "distro"
