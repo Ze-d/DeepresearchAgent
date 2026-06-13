@@ -8,10 +8,16 @@ from deepresearch.tools import search_web, fetch_content, SearchResult
 class TestSearchWeb:
     def test_returns_list(self, monkeypatch):
         """搜索返回 SearchResult 列表"""
-        def mock_search(self, query, max_results, **kwargs):
-            return [{"title": "Test", "href": "https://example.com", "body": "snippet"}]
+        from unittest.mock import MagicMock
 
-        monkeypatch.setattr("duckduckgo_search.DDGS.text", mock_search)
+        mock_ddgs_cls = MagicMock()
+        mock_instance = MagicMock()
+        mock_instance.text.return_value = [
+            {"title": "Test", "href": "https://example.com", "body": "snippet"},
+        ]
+        mock_ddgs_cls.return_value.__enter__.return_value = mock_instance
+
+        monkeypatch.setattr("deepresearch.tools.DDGS", mock_ddgs_cls)
 
         results = search_web("test query", max_results=3)
         assert len(results) > 0
@@ -22,10 +28,14 @@ class TestSearchWeb:
 
     def test_empty_results(self, monkeypatch):
         """无结果时返回空列表不报错"""
-        def mock_search(self, query, max_results, **kwargs):
-            return []
+        from unittest.mock import MagicMock
 
-        monkeypatch.setattr("duckduckgo_search.DDGS.text", mock_search)
+        mock_ddgs_cls = MagicMock()
+        mock_instance = MagicMock()
+        mock_instance.text.return_value = []
+        mock_ddgs_cls.return_value.__enter__.return_value = mock_instance
+
+        monkeypatch.setattr("deepresearch.tools.DDGS", mock_ddgs_cls)
         results = search_web("no results", max_results=3)
         assert results == []
 

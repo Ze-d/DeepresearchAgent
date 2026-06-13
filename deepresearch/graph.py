@@ -1,4 +1,6 @@
 # deepresearch/graph.py
+import logging
+
 from langchain_core.language_models import BaseChatModel
 from langgraph.graph import StateGraph, START, END
 
@@ -11,6 +13,8 @@ from deepresearch.nodes import (
     make_final_node,
 )
 from deepresearch.llm import build_llm
+
+logger = logging.getLogger(__name__)
 
 
 def route_after_critique(state: AgentState) -> str:
@@ -25,11 +29,14 @@ def route_after_critique(state: AgentState) -> str:
     max_iterations = state.get("max_iterations", 2)
 
     if critique.get("pass") is True:
+        logger.info("Critique passed (iteration %d/%d) → routing to final", iteration, max_iterations)
         return "final"
 
     if iteration >= max_iterations:
+        logger.info("Max iterations reached (%d/%d) → routing to final", iteration, max_iterations)
         return "final"
 
+    logger.info("Critique not passed (iteration %d/%d) → continuing research", iteration, max_iterations)
     return "research"
 
 
@@ -41,6 +48,8 @@ def build_graph(llm: BaseChatModel | None = None) -> StateGraph:
     """
     if llm is None:
         llm = build_llm()
+
+    logger.info("Building StateGraph: plan → research → summary → critique → {final|research}")
 
     graph = StateGraph(AgentState)
 
@@ -66,4 +75,5 @@ def build_graph(llm: BaseChatModel | None = None) -> StateGraph:
 
     graph.add_edge("final", END)
 
+    logger.debug("StateGraph built successfully with %d nodes", 5)
     return graph

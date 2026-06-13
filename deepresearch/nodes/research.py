@@ -51,11 +51,19 @@ def make_research_node(llm: BaseChatModel):
         sub_questions = plan.get("sub_questions", [])
         sorted_qs = sorted(sub_questions, key=lambda q: q.get("priority", 99))
 
+        search_count = 0
+        max_total_searches = 6  # 单轮最多 6 次搜索，防止 API 调用过多
+
         for sq in sorted_qs:
+            if search_count >= max_total_searches:
+                break
             queries = sq.get("search_queries", [])
             for query in queries[:2]:
-                logger.info("Searching: %s", query)
+                if search_count >= max_total_searches:
+                    break
+                logger.info("Searching (%d/%d): %s", search_count + 1, max_total_searches, query)
                 results = search_web(query, max_results=cfg.max_search_results)
+                search_count += 1
                 for r in results:
                     source_id = str(uuid.uuid4())[:8]
                     source_dict = {

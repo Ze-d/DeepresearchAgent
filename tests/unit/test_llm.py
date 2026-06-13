@@ -14,6 +14,7 @@ def test_build_llm_missing_api_key(monkeypatch):
 def test_build_llm_with_api_key(monkeypatch):
     """有 API key 时返回 ChatDeepSeek 实例"""
     monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-test")
+    monkeypatch.setenv("DEEPSEEK_MODEL", "deepseek-chat")
 
     from langchain_deepseek import ChatDeepSeek
 

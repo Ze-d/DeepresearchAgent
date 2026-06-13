@@ -1,12 +1,16 @@
 # deepresearch/cli.py
+import logging
 from pathlib import Path
 
 import typer
 
+from deepresearch.config import Settings
 from deepresearch.graph import build_graph
+from deepresearch.logging import setup_logging
 from deepresearch.state import AgentState
 
 app = typer.Typer(help="DeepResearch Agent — LangGraph-based research workflow")
+logger = logging.getLogger(__name__)
 
 
 @app.callback(invoke_without_command=True)
@@ -39,8 +43,19 @@ def run(
     query: str = typer.Argument(..., help="研究问题"),
     max_iterations: int = typer.Option(2, "--max-iterations", "-n", help="最大研究迭代次数"),
     output: str | None = typer.Option(None, "--output", "-o", help="输出文件路径"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="启用 DEBUG 级别日志"),
+    log_file: str | None = typer.Option(None, "--log-file", help="日志文件路径"),
 ):
     """运行 DeepResearch Agent 完成研究任务。"""
+    cfg = Settings()
+    log_level = "DEBUG" if verbose else cfg.log_level
+    resolved_log_file = log_file or cfg.log_file
+    setup_logging(level=log_level, log_file=resolved_log_file)
+
+    logger.info("Starting DeepResearch Agent")
+    logger.debug("Query: %s", query)
+    logger.debug("Max iterations: %d, Log level: %s", max_iterations, log_level)
+
     initial_state = _make_initial_state(query, max_iterations)
 
     graph = build_graph()
@@ -70,4 +85,11 @@ def run(
     if critique:
         typer.echo(f"   Critique 评分: {critique.get('score', 'N/A')}")
 
+    errors = result.get("errors", [])
+    if errors:
+        typer.echo(f"   ⚠️  错误: {len(errors)} 个")
+        for e in errors:
+            logger.error("Workflow error: %s", e)
+
+    logger.info("DeepResearch Agent completed")
     typer.echo("✅ 研究完成")

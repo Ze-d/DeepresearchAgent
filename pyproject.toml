@@ -15,6 +15,7 @@ dependencies = [
     "pydantic",
     "pydantic-settings",
     "python-dotenv",
+    "ddgs",
     "duckduckgo-search",
     "trafilatura",
     "beautifulsoup4",

@@ -1,11 +1,20 @@
 # deepresearch/config.py
+from pathlib import Path
+
+from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
+
+# 强制 .env 覆盖系统环境变量（避免机器上残留的全局 key 干扰）
+_env_path = Path(__file__).resolve().parent.parent / ".env"
+if _env_path.exists():
+    load_dotenv(_env_path, override=True)
 
 
 class Settings(BaseSettings):
-    """DeepResearch Agent 全局配置，从 .env 和环境变量加载。"""
+    """DeepResearch Agent 全局配置。"""
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    # 不设 env_file：.env 值已通过 load_dotenv(override=True) 注入环境变量。
+    # 这确保 pydantic-settings 只读环境变量，monkeypatch 可在测试中正常覆盖。
 
     # DeepSeek
     deepseek_api_key: str = ""
@@ -21,6 +30,10 @@ class Settings(BaseSettings):
 
     # 输出
     output_dir: str = "outputs"
+
+    # 日志
+    log_level: str = "INFO"
+    log_file: str | None = None
 
     # LLM 调用参数
     temperature: float = 0.0
