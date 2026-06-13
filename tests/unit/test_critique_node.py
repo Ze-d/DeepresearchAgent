@@ -28,16 +28,16 @@ CRITIQUE_FAIL = json.dumps({
 
 class TestComputeFixRate:
     def test_first_iteration_none(self):
-        assert compute_fix_rate(None, 3, 0) is None
+        assert compute_fix_rate(None, 3) is None
 
     def test_all_fixed(self):
-        assert compute_fix_rate(3, 0, 1) == 1.0
+        assert compute_fix_rate(3, 0) == 1.0
 
     def test_partial_fix(self):
-        assert compute_fix_rate(3, 1, 1) == 0.67
+        assert compute_fix_rate(3, 1) == 0.67
 
     def test_none_fixed(self):
-        assert compute_fix_rate(3, 3, 1) == 0.0
+        assert compute_fix_rate(3, 3) == 0.0
 
 
 class TestCritiqueNode:
@@ -86,7 +86,7 @@ class TestCritiqueNode:
         assert result["critique_result"]["pass"] is True
 
     def test_fix_rate_second_iteration(self):
-        llm = FakeChatModel(default_response=CRITIQUE_PASS)
+        llm = FakeChatModel(default_response=CRITIQUE_FAIL)  # 1 issue
         node = make_critique_node(llm)
         state = self._make_state(
             iteration=0,
@@ -98,4 +98,5 @@ class TestCritiqueNode:
         )
         result = node(state)
         assert len(result["iteration_metrics"]) == 2
-        assert result["iteration_metrics"][1]["fix_rate"] == 1.0
+        # 3 prev issues -> 1 current issue = 2 fixed -> fix_rate = 0.67
+        assert result["iteration_metrics"][1]["fix_rate"] == 0.67

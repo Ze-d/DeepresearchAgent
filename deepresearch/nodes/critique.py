@@ -12,7 +12,7 @@ from deepresearch.prompts import build_critique_messages
 logger = logging.getLogger(__name__)
 
 
-def compute_fix_rate(prev_issues_count: int | None, current_issues_count: int, iteration: int) -> float | None:
+def compute_fix_rate(prev_issues_count: int | None, current_issues_count: int) -> float | None:
     """计算 issue 修复率。首轮返回 None。"""
     if prev_issues_count is None:
         return None
@@ -31,7 +31,7 @@ def make_critique_node(llm: BaseChatModel):
         logger.info("Critique node: iteration %d → %d", iteration, new_iteration)
 
         prev_metrics = state.get("iteration_metrics", [])
-        prev_issues_count = len(prev_metrics[-1].get("issues", [])) if prev_metrics else None
+        prev_issues_count = prev_metrics[-1].get("issues_count") if prev_metrics else None
 
         t0 = time.perf_counter()
         messages = build_critique_messages(
@@ -83,7 +83,7 @@ def make_critique_node(llm: BaseChatModel):
             }
 
         current_issues_count = len(critique["issues"])
-        fix_rate = compute_fix_rate(prev_issues_count, current_issues_count, iteration)
+        fix_rate = compute_fix_rate(prev_issues_count, current_issues_count)
 
         metric = {
             "iteration": new_iteration,
