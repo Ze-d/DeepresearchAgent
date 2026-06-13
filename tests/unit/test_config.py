@@ -59,3 +59,40 @@ def test_settings_from_dotenv(monkeypatch, tmp_path):
 
     assert s.deepseek_api_key == "sk-from-file"
     assert s.max_iterations == 4
+
+
+def test_v1_dedup_defaults(monkeypatch):
+    """v1 dedup 配置项默认值正确"""
+    for key in ("DEEPSEEK_API_KEY", "DEEPSEEK_MODEL", "MAX_ITERATIONS",
+                "MAX_SEARCH_RESULTS", "OUTPUT_DIR", "TEMPERATURE", "MAX_RETRIES",
+                "SEARCH_PROVIDER", "TAVILY_API_KEY", "LOG_LEVEL", "LOG_FILE"):
+        monkeypatch.delenv(key, raising=False)
+
+    from deepresearch.config import Settings
+    s = Settings()
+    assert s.dedup_enabled is True
+    assert s.dedup_max_calls_per_run == 20
+    assert s.source_ranking_enabled is True
+    assert s.checkpoint_enabled is True
+    assert s.stream_enabled is True
+    assert s.metrics_enabled is True
+
+
+def test_v1_config_from_env(monkeypatch):
+    """v1 配置项可从环境变量读取"""
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-test")
+    monkeypatch.setenv("DEDUP_ENABLED", "false")
+    monkeypatch.setenv("DEDUP_MAX_CALLS_PER_RUN", "10")
+    monkeypatch.setenv("SOURCE_RANKING_ENABLED", "false")
+    monkeypatch.setenv("CHECKPOINT_ENABLED", "false")
+    monkeypatch.setenv("STREAM_ENABLED", "false")
+    monkeypatch.setenv("METRICS_ENABLED", "false")
+
+    from deepresearch.config import Settings
+    s = Settings()
+    assert s.dedup_enabled is False
+    assert s.dedup_max_calls_per_run == 10
+    assert s.source_ranking_enabled is False
+    assert s.checkpoint_enabled is False
+    assert s.stream_enabled is False
+    assert s.metrics_enabled is False
