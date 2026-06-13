@@ -20,7 +20,7 @@ def make_critique_node(llm: BaseChatModel):
 
         messages = build_critique_messages(
             user_query=state["user_query"],
-            draft_summary=state.get("draft_summary", ""),
+            draft_summary=state.get("draft_summary") or "",
             sources=state.get("sources", []),
             evidences=state.get("evidences", []),
         )

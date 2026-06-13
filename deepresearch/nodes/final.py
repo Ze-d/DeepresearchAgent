@@ -16,8 +16,8 @@ def make_final_node(llm: BaseChatModel):
         logger.info("Final node: generating report")
         messages = build_finalizer_messages(
             user_query=state["user_query"],
-            draft_summary=state.get("draft_summary", ""),
-            critique_result=state.get("critique_result", {}),
+            draft_summary=state.get("draft_summary") or "",
+            critique_result=state.get("critique_result") or {},
             sources=state.get("sources", []),
         )
         response = llm.invoke(messages)

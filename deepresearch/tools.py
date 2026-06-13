@@ -1,6 +1,8 @@
 # deepresearch/tools.py
+import importlib
 import logging
 from dataclasses import dataclass
+from typing import Any
 
 import httpx
 from trafilatura import extract
@@ -17,13 +19,17 @@ _HEADERS = {
 }
 
 # 模块级导入 DDGS，方便测试 mock（优先 ddgs，回退 duckduckgo_search）
-try:
-    from ddgs import DDGS  # type: ignore[import-not-found]
-except ImportError:
-    try:
-        from duckduckgo_search import DDGS  # type: ignore[import-not-found]
-    except ImportError:
-        DDGS = None  # type: ignore[assignment]
+def _load_ddgs() -> Any:
+    for module_name in ("ddgs", "duckduckgo_search"):
+        try:
+            module = importlib.import_module(module_name)
+        except ImportError:
+            continue
+        return getattr(module, "DDGS", None)
+    return None
+
+
+DDGS: Any = _load_ddgs()
 
 
 @dataclass

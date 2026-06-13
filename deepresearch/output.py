@@ -34,25 +34,32 @@ def save_markdown(content: str, path: Path) -> None:
 def save_all(state: AgentState, session_dir: Path) -> None:
     """保存所有中间产物到 session 目录。"""
     count = 0
-    if state.get("research_plan"):
-        save_json(state["research_plan"], session_dir / "plan.json")
+    research_plan = state.get("research_plan")
+    if research_plan:
+        save_json(research_plan, session_dir / "plan.json")
         count += 1
-    if state.get("search_results"):
-        save_json(state["search_results"], session_dir / "search_results.json")
+    search_results = state.get("search_results")
+    if search_results:
+        save_json(search_results, session_dir / "search_results.json")
         count += 1
-    if state.get("sources"):
-        save_json(state["sources"], session_dir / "sources.json")
+    sources = state.get("sources")
+    if sources:
+        save_json(sources, session_dir / "sources.json")
         count += 1
-    if state.get("evidences"):
-        save_json(state["evidences"], session_dir / "evidences.json")
+    evidences = state.get("evidences")
+    if evidences:
+        save_json(evidences, session_dir / "evidences.json")
         count += 1
-    if state.get("draft_summary"):
-        save_markdown(state["draft_summary"], session_dir / "draft_summary.md")
+    draft_summary = state.get("draft_summary")
+    if draft_summary:
+        save_markdown(draft_summary, session_dir / "draft_summary.md")
         count += 1
-    if state.get("critique_result"):
-        save_json(state["critique_result"], session_dir / "critique.json")
+    critique_result = state.get("critique_result")
+    if critique_result:
+        save_json(critique_result, session_dir / "critique.json")
         count += 1
-    if state.get("final_report"):
-        save_markdown(state["final_report"], session_dir / "final_report.md")
+    final_report = state.get("final_report")
+    if final_report:
+        save_markdown(final_report, session_dir / "final_report.md")
         count += 1
     logger.info("Saved %d artifacts to %s", count, session_dir)

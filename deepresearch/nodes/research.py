@@ -3,6 +3,7 @@ import json
 import logging
 import re
 import uuid
+from typing import Any
 
 from langchain_core.language_models import BaseChatModel
 
@@ -50,6 +51,7 @@ def make_research_node(llm: BaseChatModel):
 
         critique = state.get("critique_result") or {}
         follow_up_queries = critique.get("new_search_queries") or []
+        sub_questions: list[dict[str, Any]]
         if critique.get("pass") is False and follow_up_queries:
             sub_questions = [{
                 "question": state.get("user_query", ""),
@@ -57,7 +59,8 @@ def make_research_node(llm: BaseChatModel):
                 "search_queries": follow_up_queries,
             }]
         else:
-            sub_questions = plan.get("sub_questions", [])
+            raw_sub_questions = plan.get("sub_questions", [])
+            sub_questions = raw_sub_questions if isinstance(raw_sub_questions, list) else []
 
         sorted_qs = sorted(sub_questions, key=lambda q: q.get("priority", 99))
 

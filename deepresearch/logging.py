@@ -62,6 +62,7 @@ def setup_logging(
         root_logger.removeHandler(h)
 
     # ——— 控制台 handler（Rich） ———
+    console_handler: logging.Handler
     try:
         from rich.logging import RichHandler
 
