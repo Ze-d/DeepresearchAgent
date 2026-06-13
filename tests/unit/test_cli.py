@@ -56,6 +56,13 @@ def test_cli_checkpoints_empty(tmp_path):
     assert result.exit_code == 0
 
 
+def test_cli_serve_help():
+    """deepresearch serve --help 正常输出"""
+    result = runner.invoke(app, ["serve", "--help"])
+    assert result.exit_code == 0
+    assert "serve" in result.stdout.lower() or "server" in result.stdout.lower()
+
+
 def test_run_workflow_exists():
     """run_workflow 可从 CLI 模块导入"""
     from deepresearch.cli import run_workflow

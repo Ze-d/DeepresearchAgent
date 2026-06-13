@@ -275,3 +275,35 @@ def checkpoints(
     typer.echo(f"Checkpoints ({len(cps)}):")
     for cp in cps:
         typer.echo(f"  {cp['id']} — {cp['size_bytes']} bytes")
+
+
+@app.command()
+def serve(
+    host: str = typer.Option("127.0.0.1", "--host", "-h", help="服务器绑定的 IP"),
+    port: int = typer.Option(8000, "--port", "-p", help="服务器端口"),
+    reload: bool = typer.Option(False, "--reload", help="启用热重载（开发模式）"),
+):
+    """启动 Web 服务器（FastAPI + Vue 前端）。"""
+    import uvicorn
+
+    # 覆盖配置
+    import deepresearch.config as config_module
+    config_module.settings.server_host = host
+    config_module.settings.server_port = port
+
+    typer.echo(f"🚀 DeepResearch Agent Web Server")
+    typer.echo(f"   地址: http://{host}:{port}")
+    typer.echo(f"   API 文档: http://{host}:{port}/docs")
+
+    web_dist = Path(__file__).resolve().parent.parent / "web" / "dist"
+    if not web_dist.exists():
+        typer.echo(f"   ⚠️  前端未构建（web/dist/ 不存在）")
+        typer.echo(f"   请先运行: cd web && npm install && npm run build")
+
+    uvicorn.run(
+        "server:app",
+        host=host,
+        port=port,
+        reload=reload,
+        log_level="info",
+    )
