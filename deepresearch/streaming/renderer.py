@@ -39,9 +39,7 @@ class StreamRenderer:
         nodes_order = ["plan", "research", "summary", "critique", "final"]
         for node in nodes_order:
             label = _NODE_LABELS.get(node, node)
-            if node == current_node:
-                table.add_row("⏳", label, "进行中...")
-            elif node in self._completed:
+            if node in self._completed:
                 elapsed = time.perf_counter() - self._start_times.get(node, time.perf_counter())
                 table.add_row("✅", label, f"已完成 ({elapsed:.1f}s)")
             else:
@@ -54,11 +52,11 @@ class StreamRenderer:
             return
         self._start_times[node_name] = time.perf_counter()
 
-    def render_node_done(self, node_name: str, _result: dict[str, Any]) -> None:
+    def render_node_done(self, node_name: str, result: dict[str, Any]) -> None:
         """标记 node 完成。"""
         if not self._enabled:
             return
-        self._completed[node_name] = _result
+        self._completed[node_name] = result
 
     def render_summary(self, result: dict[str, Any]) -> None:
         """打印最终摘要。"""
