@@ -122,3 +122,23 @@ def test_graph_conditional_route_exceeds_max_iterations():
         "status": "running", "errors": [],
     }
     assert route_after_critique(state_max) == "final"
+
+
+def test_graph_compiles_with_checkpointer():
+    """Graph 可以编译为带 checkpointer 的 app"""
+    from deepresearch.checkpoint.manager import CheckpointManager
+    import tempfile
+    from pathlib import Path
+
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+        session_dir = Path(tmp) / "test_session"
+        session_dir.mkdir()
+        cm = CheckpointManager(session_dir)
+
+        llm = FakeChatModel(default_response='{"research_goal":"test","sub_questions":[],"expected_sections":[],"success_criteria":[]}')
+        graph = build_graph(llm=llm)
+        app = graph.compile(checkpointer=cm.saver)
+        assert app is not None
+        # Close SQLite connection to release Windows file lock
+        if cm._saver is not None:
+            cm._saver.conn.close()
