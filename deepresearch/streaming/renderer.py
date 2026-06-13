@@ -29,7 +29,7 @@ class StreamRenderer:
         self._start_times: dict[str, float] = {}
         self._completed: dict[str, dict[str, Any]] = {}
 
-    def _build_table(self, current_node: str | None = None) -> Table:
+    def _build_table(self) -> Table:
         """构建进度表格。"""
         table = Table(show_header=False, expand=True, box=None)
         table.add_column("status", width=3)
@@ -42,21 +42,30 @@ class StreamRenderer:
             if node in self._completed:
                 elapsed = time.perf_counter() - self._start_times.get(node, time.perf_counter())
                 table.add_row("✅", label, f"已完成 ({elapsed:.1f}s)")
+            elif node in self._start_times and node not in self._completed:
+                # 正在执行中
+                elapsed = time.perf_counter() - self._start_times[node]
+                table.add_row("⏳", label, f"进行中... ({elapsed:.0f}s)")
             else:
                 table.add_row("⬜", label, "等待中")
         return table
 
     def render_node_start(self, node_name: str) -> None:
-        """标记 node 开始。"""
+        """标记 node 开始，立即输出提示。"""
         if not self._enabled:
             return
         self._start_times[node_name] = time.perf_counter()
+        label = _NODE_LABELS.get(node_name, node_name)
+        self.console.print(f"⏳ {label} 开始执行...")
 
     def render_node_done(self, node_name: str, result: dict[str, Any]) -> None:
         """标记 node 完成。"""
         if not self._enabled:
             return
         self._completed[node_name] = result
+        elapsed = time.perf_counter() - self._start_times.get(node_name, time.perf_counter())
+        label = _NODE_LABELS.get(node_name, node_name)
+        self.console.print(f"✅ {label} 完成 ({elapsed:.1f}s)")
 
     def render_summary(self, result: dict[str, Any]) -> None:
         """打印最终摘要。"""
@@ -77,27 +86,31 @@ class StreamRenderer:
 
 
 def stream_with_rich(graph, initial_state: dict, config: dict) -> dict:
-    """使用 Rich Live 逐个渲染 LangGraph stream 执行过程。"""
+    """逐个渲染 LangGraph stream 执行过程，实时显示进度。
+
+    使用 graph.stream(stream_mode="updates") 在每个 node 完成时输出，
+    同时 research_node 内部通过 console.print 输出子步骤进度。
+    """
     if not settings.stream_enabled:
         return graph.invoke(initial_state, config)
 
     console = Console()
     renderer = StreamRenderer(console)
 
-    panel = Panel(
-        renderer._build_table(),
-        title=f"🔍 DeepResearch: {initial_state.get('user_query', '')}",
+    console.print(Panel(
+        f"问题: {initial_state.get('user_query', '')}",
+        title="🔍 DeepResearch Agent v1",
         border_style="blue",
-    )
+    ))
 
-    with Live(panel, console=console, refresh_per_second=4, transient=False) as live:
-        last_result = initial_state
-        for chunk in graph.stream(initial_state, config, stream_mode="updates"):
-            for node_name, node_result in chunk.items():
-                renderer.render_node_start(node_name)
-                renderer.render_node_done(node_name, node_result)
-                last_result = {**last_result, **node_result}
-                live.update(renderer._build_table())
+    last_result = initial_state
+    for chunk in graph.stream(initial_state, config, stream_mode="updates"):
+        for node_name, node_result in chunk.items():
+            renderer.render_node_start(node_name)
+            # node 执行完成才到这里（stream_mode="updates" 的特性）
+            # 内部的 console.print 已经实时输出了进度
+            renderer.render_node_done(node_name, node_result)
+            last_result = {**last_result, **node_result}
 
     renderer.render_summary(last_result)
     return last_result

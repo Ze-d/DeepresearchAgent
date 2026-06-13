@@ -62,7 +62,7 @@ def search_web(query: str, max_results: int = 5) -> list[SearchResult]:
     return results
 
 
-def fetch_content(url: str, timeout: float = 10.0) -> str:
+def fetch_content(url: str, timeout: float = 8.0) -> str:
     """从 URL 抓取并抽取网页正文。"""
     try:
         resp = httpx.get(url, timeout=timeout, follow_redirects=True, headers=_HEADERS)

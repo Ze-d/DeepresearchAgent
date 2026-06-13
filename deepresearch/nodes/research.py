@@ -14,6 +14,17 @@ from deepresearch.config import Settings
 
 logger = logging.getLogger(__name__)
 
+# Rich console for real-time progress output (bypasses Live panel)
+_console = None
+
+
+def _get_console():
+    global _console
+    if _console is None:
+        from rich.console import Console
+        _console = Console()
+    return _console
+
 
 def _extract_evidences(sub_question: str, source_content: str, llm: BaseChatModel) -> list[dict]:
     """用 LLM 从 source content 中抽取 evidence 列表。"""
@@ -74,10 +85,11 @@ def make_research_node(llm: BaseChatModel):
             for query in queries[:2]:
                 if search_count >= max_total_searches:
                     break
-                logger.info("Searching (%d/%d): %s", search_count + 1, max_total_searches, query)
+                _get_console().print(f"   🔎 搜索 ({search_count + 1}/{max_total_searches}): {query}")
                 results = search_web(query, max_results=cfg.max_search_results)
                 search_count += 1
-                for r in results:
+                _get_console().print(f"       找到 {len(results)} 条结果")
+                for idx_r, r in enumerate(results):
                     source_id = str(uuid.uuid4())[:8]
                     source_dict = {
                         "id": source_id,
@@ -88,12 +100,15 @@ def make_research_node(llm: BaseChatModel):
                         "source_type": "web",
                         "score": 0.5,
                     }
+                    _get_console().print(f"       📄 抓取 ({idx_r + 1}/{len(results)}): {r.url[:80]}...")
                     content = fetch_content(r.url)
                     if content:
+                        _get_console().print(f"       📝 抽取证据 ({len(content)} 字符)...")
                         source_dict["content"] = content
                         evidences = _extract_evidences(
                             sq.get("question", ""), content, llm
                         )
+                        _get_console().print(f"          ✓ 得到 {len(evidences)} 条证据")
                         for ev in evidences:
                             ev["id"] = str(uuid.uuid4())[:8]
                             ev["source_id"] = source_id
@@ -108,12 +123,18 @@ def make_research_node(llm: BaseChatModel):
 
         # v1: 对 evidences 做语义去重
         if all_evidences:
+            _get_console().print(f"   🔄 语义去重: {len(all_evidences)} 条证据...")
             from deepresearch.evidence.dedup import deduplicate_evidences
             all_evidences = deduplicate_evidences(all_evidences, llm)
+            _get_console().print(f"       去重后: {len(all_evidences)} 条证据")
 
         # v1: 对 sources 做权威度评分排序
+        _get_console().print(f"   📊 来源评分排序: {len(all_sources)} 条来源...")
         from deepresearch.evidence.ranking import rank_sources
         all_sources = rank_sources(all_sources)
+        top = all_sources[0].get("title", "")[:50] if all_sources else ""
+        if top:
+            _get_console().print(f"       最高分: {top} (score={all_sources[0].get('score', 0)})")
 
         logger.info("Research done: %d sources, %d evidences", len(all_sources), len(all_evidences))
 

@@ -7,6 +7,17 @@ from deepresearch.config import settings
 
 logger = logging.getLogger(__name__)
 
+# Rich console for progress output
+_console = None
+
+
+def _get_console():
+    global _console
+    if _console is None:
+        from rich.console import Console
+        _console = Console()
+    return _console
+
 _DEDUP_PROMPT = """你是一个文本去重助手。以下是两条 evidence，判断它们是否表达相同的信息。
 
 Evidence A:
@@ -57,6 +68,8 @@ def _dedup_within_group(evidences: list[dict], llm: BaseChatModel, max_calls: in
     removed_ids: set[str] = set()
     call_count = 0
 
+    total_pairs = min(len(sorted_evs) * (len(sorted_evs) - 1) // 2, max_calls)
+    _get_console().print(f"      去重: 最多 {total_pairs} 对比较...")
     for i, ev_a in enumerate(sorted_evs):
         if ev_a["id"] in removed_ids:
             continue
@@ -70,6 +83,8 @@ def _dedup_within_group(evidences: list[dict], llm: BaseChatModel, max_calls: in
                 removed_ids.add(ev_b["id"])
                 logger.debug("Dedup: removed %s (duplicate of %s)", ev_b["id"], ev_a["id"])
             call_count += 1
+    if removed_ids:
+        _get_console().print(f"      去重完成: 移除 {len(removed_ids)} 条重复")
 
     return kept
 
