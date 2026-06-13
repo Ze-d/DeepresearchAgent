@@ -64,6 +64,52 @@ class CritiqueResult(BaseModel):
         return super().model_dump(**kwargs)
 
 
+# ——— v1: Citation ———
+
+
+class Citation(BaseModel):
+    """从报告中提取的引用条目。"""
+    id: int
+    title: str
+    url: str
+    context: str = ""
+
+
+# ——— v1: Enhanced Critique ———
+
+
+class DimensionScore(BaseModel):
+    """单个 Critique 维度的评分。"""
+    score: float
+    issues: list[str] = []
+    status: str = "pass"  # "pass" | "fail"
+
+
+class EnhancedCritiqueResult(BaseModel):
+    """v1 增强版 Critique 结果，包含三维度评分。"""
+    model_config = {"populate_by_name": True}
+    pass_: bool = Field(alias="pass")
+    overall_score: float
+    dimensions: dict[str, dict[str, Any]]  # fact_check / logic_coherence / coverage
+    issues: list[dict[str, Any]]
+    new_search_queries: list[str]
+
+    def model_dump(self, **kwargs):
+        kwargs.setdefault("by_alias", True)
+        return super().model_dump(**kwargs)
+
+
+class IterationMetrics(BaseModel):
+    """单轮迭代的执行指标。"""
+    iteration: int
+    overall_score: float
+    dimensions: dict[str, dict[str, Any]]
+    issues_count: int
+    fix_rate: float | None = None
+    tokens_used: int = 0
+    latency_ms: float = 0
+
+
 # ——— 最终报告 ———
 
 
@@ -90,3 +136,7 @@ class AgentState(TypedDict):
     max_iterations: int
     status: str
     errors: list[str]
+    # v1 新增
+    citations: list[dict[str, Any]]
+    iteration_metrics: list[dict[str, Any]]
+    checkpoint_ref: str | None
