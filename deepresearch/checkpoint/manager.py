@@ -26,7 +26,7 @@ class CheckpointManager:
         if not settings.checkpoint_enabled:
             return None
         if self._saver is None:
-            conn = sqlite3.connect(str(self.db_path))
+            conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
             self._saver = SqliteSaver(conn)
         return self._saver
 
