@@ -10,7 +10,8 @@
 | LLM 应用框架 | LangChain |
 | 默认模型 | DeepSeek API |
 | DeepSeek 接入 | langchain-deepseek |
-| CLI | Typer |
+| CLI | Typer + Rich |
+| 日志 | Rich (RichHandler) + logging |
 | 配置管理 | pydantic-settings |
 | 数据模型 | Pydantic |
 | 搜索工具 | Tavily / DuckDuckGo fallback |
