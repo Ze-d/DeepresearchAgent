@@ -81,7 +81,7 @@ def run(
     config = {"configurable": {"thread_id": session_dir.name}}
     result = stream_with_rich(app_graph, initial_state, config)
 
-    final = result.get("final_report", "")
+    final = result.get("final_report") or ""
     typer.echo("\n" + "=" * 60)
     typer.echo(final)
     typer.echo("=" * 60)

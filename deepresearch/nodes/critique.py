@@ -36,7 +36,7 @@ def make_critique_node(llm: BaseChatModel):
         t0 = time.perf_counter()
         messages = build_critique_messages(
             user_query=state["user_query"],
-            draft_summary=state.get("draft_summary", ""),
+            draft_summary=state.get("draft_summary") or "",
             sources=state.get("sources", []),
             evidences=state.get("evidences", []),
             prev_critique=state.get("critique_result"),

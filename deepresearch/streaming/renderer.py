@@ -1,12 +1,14 @@
 import logging
 import time
-from typing import Any
+from collections.abc import Mapping
+from typing import Any, cast
 
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
 from deepresearch.config import settings
+from deepresearch.state import AgentState
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +68,7 @@ class StreamRenderer:
         label = _NODE_LABELS.get(node_name, node_name)
         self.console.print(f"✅ {label} 完成 ({elapsed:.1f}s)")
 
-    def render_summary(self, result: dict[str, Any]) -> None:
+    def render_summary(self, result: Mapping[str, Any]) -> None:
         """打印最终摘要。"""
         if not self._enabled:
             return
@@ -84,14 +86,14 @@ class StreamRenderer:
         self.console.print(f"   来源数: {sources_count}, 证据数: {evidences_count}")
 
 
-def stream_with_rich(graph, initial_state: dict, config: dict) -> dict:
+def stream_with_rich(graph, initial_state: AgentState, config: dict[str, Any]) -> AgentState:
     """逐个渲染 LangGraph stream 执行过程，实时显示进度。
 
     使用 graph.stream(stream_mode="updates") 在每个 node 完成时输出，
     同时 research_node 内部通过 console.print 输出子步骤进度。
     """
     if not settings.stream_enabled:
-        return graph.invoke(initial_state, config)
+        return cast(AgentState, graph.invoke(initial_state, config))
 
     console = Console()
     renderer = StreamRenderer(console)
@@ -109,7 +111,7 @@ def stream_with_rich(graph, initial_state: dict, config: dict) -> dict:
             # node 执行完成才到这里（stream_mode="updates" 的特性）
             # 内部的 console.print 已经实时输出了进度
             renderer.render_node_done(node_name, node_result)
-            last_result = {**last_result, **node_result}
+            last_result = cast(AgentState, {**last_result, **node_result})
 
     renderer.render_summary(last_result)
     return last_result

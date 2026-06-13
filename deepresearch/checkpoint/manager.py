@@ -1,9 +1,13 @@
+from __future__ import annotations
+
 import json
 import logging
 import sqlite3
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from langgraph.checkpoint.sqlite import SqliteSaver
+if TYPE_CHECKING:
+    from langgraph.checkpoint.sqlite import SqliteSaver  # type: ignore[import-not-found]
 
 from deepresearch.state import AgentState
 from deepresearch.config import settings
@@ -26,6 +30,8 @@ class CheckpointManager:
         if not settings.checkpoint_enabled:
             return None
         if self._saver is None:
+            from langgraph.checkpoint.sqlite import SqliteSaver  # type: ignore[import-not-found]
+
             conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
             self._saver = SqliteSaver(conn)
         return self._saver
