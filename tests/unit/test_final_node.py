@@ -20,9 +20,41 @@ def test_final_node_generates_report():
         "max_iterations": 2,
         "status": "critiqued",
         "errors": [],
+        "citations": [],
+        "iteration_metrics": [],
+        "checkpoint_ref": None,
     }
 
     result = node(state)
     assert result["final_report"] is not None
     assert "最终报告" in result["final_report"]
     assert result["status"] == "completed"
+
+
+def test_final_node_extracts_citations():
+    from deepresearch.nodes.final import make_final_node
+
+    llm = FakeChatModel(default_response="根据[来源: Test](https://example.com)的研究得出结论。")
+    node = make_final_node(llm)
+    state = {
+        "user_query": "test",
+        "research_plan": {"research_goal": "test", "sub_questions": [],
+                          "expected_sections": [], "success_criteria": []},
+        "search_results": [],
+        "sources": [{"id": "s1", "url": "https://example.com"}],
+        "evidences": [],
+        "draft_summary": "draft",
+        "critique_result": {"overall_score": 0.9, "pass": True, "issues": []},
+        "final_report": None,
+        "iteration": 1,
+        "max_iterations": 2,
+        "status": "critiqued",
+        "errors": [],
+        "citations": [],
+        "iteration_metrics": [],
+        "checkpoint_ref": None,
+    }
+    result = node(state)
+    assert result["final_report"] is not None
+    assert "## 参考文献" in result["final_report"]
+    assert len(result["citations"]) > 0

@@ -8,6 +8,10 @@ from deepresearch.state import (
     CritiqueResult,
     FinalReport,
     AgentState,
+    Citation,
+    DimensionScore,
+    EnhancedCritiqueResult,
+    IterationMetrics,
 )
 
 
@@ -206,6 +210,144 @@ class TestFinalReport:
         assert report.markdown.startswith("# 报告")
         assert len(report.sources) == 1
         assert report.limitations == ["样本量有限"]
+
+
+class TestCitation:
+    def test_create(self):
+        c = Citation(
+            id=1,
+            title="LangGraph Docs",
+            url="https://langchain-ai.github.io/langgraph/",
+            context="LangGraph 是构建 Agent 的核心框架...",
+        )
+        assert c.id == 1
+        assert c.title == "LangGraph Docs"
+        assert c.url == "https://langchain-ai.github.io/langgraph/"
+
+    def test_serialize(self):
+        c = Citation(id=1, title="Test", url="https://example.com", context="ctx")
+        d = c.model_dump()
+        assert d["id"] == 1
+        assert d["title"] == "Test"
+        assert d["url"] == "https://example.com"
+        assert d["context"] == "ctx"
+
+
+class TestDimensionScore:
+    def test_create(self):
+        ds = DimensionScore(score=0.8, issues=["缺少引用"], status="pass")
+        assert ds.score == 0.8
+        assert ds.status == "pass"
+        assert len(ds.issues) == 1
+
+    def test_serialize(self):
+        ds = DimensionScore(score=0.6, issues=[], status="fail")
+        d = ds.model_dump()
+        assert d["score"] == 0.6
+        assert d["status"] == "fail"
+
+
+class TestEnhancedCritiqueResult:
+    def test_create(self):
+        cr = EnhancedCritiqueResult(
+            pass_=False,
+            overall_score=0.65,
+            dimensions={
+                "fact_check": {"score": 0.8, "issues": [], "status": "pass"},
+                "logic_coherence": {"score": 0.6, "issues": ["矛盾"], "status": "fail"},
+                "coverage": {"score": 0.55, "issues": ["遗漏子问题"], "status": "fail"},
+            },
+            issues=[
+                {"type": "insufficient_evidence", "severity": "high",
+                 "description": "缺少引用", "suggested_action": "补充来源"}
+            ],
+            new_search_queries=["more search"],
+        )
+        assert cr.overall_score == 0.65
+        assert len(cr.dimensions) == 3
+        assert cr.dimensions["fact_check"]["status"] == "pass"
+
+    def test_pass_condition(self):
+        cr = EnhancedCritiqueResult(
+            pass_=True,
+            overall_score=0.85,
+            dimensions={
+                "fact_check": {"score": 0.9, "issues": [], "status": "pass"},
+                "logic_coherence": {"score": 0.85, "issues": [], "status": "pass"},
+                "coverage": {"score": 0.8, "issues": [], "status": "pass"},
+            },
+            issues=[],
+            new_search_queries=[],
+        )
+        assert cr.pass_ is True
+
+    def test_serialize_pass_field(self):
+        cr = EnhancedCritiqueResult(
+            pass_=False,
+            overall_score=0.5,
+            dimensions={},
+            issues=[],
+            new_search_queries=[],
+        )
+        d = cr.model_dump()
+        assert d["pass"] is False
+
+
+class TestIterationMetrics:
+    def test_create(self):
+        im = IterationMetrics(
+            iteration=1,
+            overall_score=0.65,
+            dimensions={
+                "fact_check": {"score": 0.8, "issues": [], "status": "pass"},
+                "logic_coherence": {"score": 0.6, "issues": [], "status": "fail"},
+                "coverage": {"score": 0.55, "issues": [], "status": "fail"},
+            },
+            issues_count=3,
+            fix_rate=None,
+            tokens_used=15000,
+            latency_ms=3200,
+        )
+        assert im.iteration == 1
+        assert im.fix_rate is None
+        assert im.tokens_used == 15000
+
+    def test_with_fix_rate(self):
+        im = IterationMetrics(
+            iteration=2,
+            overall_score=0.85,
+            dimensions={},
+            issues_count=1,
+            fix_rate=0.67,
+            tokens_used=18000,
+            latency_ms=3500,
+        )
+        d = im.model_dump()
+        assert d["fix_rate"] == 0.67
+
+
+class TestAgentStateV1:
+    def test_initial_state_with_v1_fields(self):
+        state: AgentState = {
+            "user_query": "测试",
+            "research_plan": None,
+            "search_results": [],
+            "sources": [],
+            "evidences": [],
+            "draft_summary": None,
+            "critique_result": None,
+            "final_report": None,
+            "iteration": 0,
+            "max_iterations": 2,
+            "status": "initialized",
+            "errors": [],
+            "citations": [],
+            "iteration_metrics": [],
+            "checkpoint_ref": None,
+        }
+        assert state["citations"] == []
+        assert state["iteration_metrics"] == []
+        assert state["checkpoint_ref"] is None
 
 
 class TestAgentState:

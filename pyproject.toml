@@ -21,6 +21,7 @@ dependencies = [
     "beautifulsoup4",
     "httpx",
     "rich",
+    "langgraph-checkpoint-sqlite>=3.1.0",
 ]
 
 [project.optional-dependencies]

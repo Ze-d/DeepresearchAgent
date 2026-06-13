@@ -22,7 +22,23 @@ def make_final_node(llm: BaseChatModel):
         )
         response = llm.invoke(messages)
         report = str(response.content) if hasattr(response, "content") else str(response)
-        return {"final_report": report, "status": "completed"}
+
+        # v1: 提取并格式化 citation
+        from deepresearch.citation.extractor import extract_citations, validate_citations
+        from deepresearch.citation.formatter import merge_citations_into_report
+
+        citations = extract_citations(report)
+        if citations:
+            validated = validate_citations(citations, state.get("sources", []))
+            report = merge_citations_into_report(report, validated)
+
+        # Return with citations in state
+        return {
+            "final_report": report,
+            "status": "completed",
+            "citations": [{"id": c.id, "title": c.title, "url": c.url}
+                          for c in (citations or [])],
+        }
 
     return final_node
 

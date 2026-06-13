@@ -35,6 +35,20 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_file: str | None = None
 
+    # v1: Evidence 质量
+    dedup_enabled: bool = True
+    dedup_max_calls_per_run: int = 20
+    source_ranking_enabled: bool = True
+
+    # v1: Checkpoint
+    checkpoint_enabled: bool = True
+
+    # v1: Streaming
+    stream_enabled: bool = True
+
+    # v1: Observability
+    metrics_enabled: bool = True
+
     # LLM 调用参数
     temperature: float = 0.0
     max_retries: int = 2

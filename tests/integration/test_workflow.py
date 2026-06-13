@@ -70,6 +70,10 @@ _BASE_STATE: AgentState = {
     "max_iterations": 1,
     "status": "initialized",
     "errors": [],
+    # v1 初始值
+    "citations": [],
+    "iteration_metrics": [],
+    "checkpoint_ref": None,
 }
 
 
@@ -109,6 +113,9 @@ def test_full_workflow_with_mock(monkeypatch):
     assert "最终报告" in result["final_report"]
     assert result["research_plan"] is not None
     assert result["status"] == "completed"
+    # v1 状态验证
+    assert "citations" in result
+    assert "iteration_metrics" in result
 
 
 def test_workflow_output_files(monkeypatch, tmp_path):
