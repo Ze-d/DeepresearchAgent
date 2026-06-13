@@ -8,12 +8,15 @@ A LangGraph-based DeepResearch Agent powered by DeepSeek API.
 - **LangGraph** stateful orchestration with conditional routing
 - **LangChain** prompt/tool/model integration
 - **DeepSeek API** support via `langchain-deepseek`
-- **Critique-driven iteration** — automatic quality check and re-research
-- **Evidence-based summarization** with source tracking
+- **Critique-driven iteration** — 3D scoring (fact check / logic coherence / coverage)
+- **Evidence quality** — semantic dedup + source authority ranking
+- **Citation management** — inline extraction + reference formatting
+- **Streaming** — Rich console live display
+- **Checkpoint** — SqliteSaver persistence + resume support
+- **Observability** — token/latency/error tracking per node
 - **Markdown report** output with intermediate artifacts
 - **CLI-first** design via Typer + Rich
-- **Structured logging** — Rich console output + file persistence, `--verbose` debug mode
-- **SDD+TDD** project structure with pytest and ruff
+- **v2: Web UI** — FastAPI + Vue 3 + SSE real-time visualization
 
 ## 2. Quick Start
 
@@ -29,49 +32,51 @@ uv run deepresearch run "调研 Deep Research Agent 的主流架构"
 
 ```text
 DeepresearchAgent/
-├── AGENTS.md                  # AI assistant conventions
-├── CLAUDE.md                  # Project instructions for AI
-├── README.md                  # This file
-├── pyproject.toml             # Project metadata & dependencies
-├── .env.example               # Environment variable template
+├── AGENTS.md
+├── CLAUDE.md
+├── README.md
+├── README_zh.md
+├── roadmap.md
+├── pyproject.toml
+├── .env.example
 │
 ├── deepresearch/              # Python package
-│   └── __init__.py
+│   ├── config.py              # pydantic-settings
+│   ├── state.py               # Pydantic models + AgentState
+│   ├── llm.py                 # DeepSeek LLM factory
+│   ├── prompts.py             # Centralized prompt templates
+│   ├── graph.py               # LangGraph StateGraph
+│   ├── cli.py                 # Typer CLI
+│   ├── tools.py               # Search + content extraction
+│   ├── output.py              # Session dir + JSON/MD writer
+│   ├── logging.py             # Structured logging
+│   ├── nodes/                 # Plan / Research / Summary / Critique / Final
+│   ├── evidence/              # Dedup + Source ranking
+│   ├── citation/              # Citation extractor + formatter
+│   ├── checkpoint/            # SqliteSaver manager
+│   ├── streaming/             # Rich Live renderer
+│   └── observability/         # Callbacks + metrics collector
+│
+├── server/                    # v2: FastAPI backend
+│   ├── __init__.py
+│   ├── tasks.py
+│   ├── stream.py
+│   └── routes.py
+│
+├── web/                       # v2: Vue 3 + Vite frontend
+│   └── src/components/
 │
 ├── docs/
-│   ├── index.md               # Documentation index (only top-level doc)
-│   ├── design/                # Design & planning docs
-│   │   ├── 00_project_overview.md
-│   │   ├── 01_v0_technical_route.md
-│   │   ├── 05_prompts.md
-│   │   ├── 07_resume_packaging.md
-│   │   └── 08_roadmap.md
-│   ├── architecture/          # Architecture & data model docs
-│   │   ├── overview.md
-│   │   ├── module-boundaries.md
-│   │   ├── 02_langgraph_architecture.md
-│   │   ├── 03_deepseek_compatibility.md
-│   │   ├── 04_state_schema.md
-│   │   └── adr/
-│   ├── testing/               # Testing strategy & guides
-│   │   ├── testing-strategy.md
-│   │   ├── tdd-guide.md
-│   │   └── test-data.md
-│   ├── ai/                    # AI collaboration docs
-│   │   ├── coding-rules.md
-│   │   ├── context-map.md
-│   │   ├── review-checklist.md
-│   │   └── 06_claude_code_execution_plan.md
-│   └── specs/                 # Feature specs (per-module)
+│   ├── index.md
+│   ├── specs/                 # v0 / v1 / v2 design + plan
+│   ├── architecture/          # Overview / LangGraph / State / DeepSeek
+│   ├── design/                # Technical route / Prompts / Resume
+│   ├── testing/               # Strategy / TDD guide / Test data
+│   ├── ai/                    # Coding rules / Context map
+│   └── workflows/             # CI/CD
 │
 ├── tests/
-│   ├── conftest.py            # Shared fixtures
-│   ├── unit/                  # Unit tests
-│   ├── integration/           # Integration tests
-│   └── fixtures/              # Test data
-│
-├── scripts/                   # Build/test/deploy scripts
-└── .github/workflows/         # CI/CD pipelines
+└── .github/workflows/
 ```
 
 ## 4. Architecture
@@ -85,7 +90,7 @@ Research Node      — execute search, extract sources & evidence
   ↓
 Summary Node       — synthesize evidence into draft summary
   ↓
-Critique Node      — check coverage, evidence quality, gaps
+Critique Node      — 3D scoring (fact check / logic coherence / coverage)
   ↓
 Conditional Route
     ├── Continue Research  →  Research Node (up to max_iterations)
@@ -115,6 +120,8 @@ Built on **LangGraph StateGraph** — all intermediate state (plan, sources, evi
 | Testing | pytest |
 | Linting | ruff |
 | Type checking | mypy |
+| v2 Backend | FastAPI + SSE |
+| v2 Frontend | Vue 3 + Vite |
 
 ## 6. Output
 
@@ -122,14 +129,19 @@ Each run creates a session directory under `outputs/`:
 
 ```text
 outputs/
-└── session_20260611_001/
-    ├── plan.json              # Research plan & sub-questions
-    ├── search_results.json    # Raw search results
-    ├── sources.json           # Curated source list
-    ├── evidences.json         # Extracted evidence items
-    ├── draft_summary.md       # Intermediate summary
-    ├── critique.json          # Critique findings & score
-    └── final_report.md        # Final Markdown report
+└── session_20260613_001/
+    ├── plan.json
+    ├── search_results.json
+    ├── sources.json
+    ├── evidences.json
+    ├── draft_summary.md
+    ├── critique.json
+    ├── final_report.md
+    ├── citations.json
+    ├── iteration_metrics.json
+    ├── metrics.json
+    ├── checkpoint.db
+    └── run.log
 ```
 
 ## 7. Commands
@@ -139,15 +151,19 @@ uv run pytest                 # Run all tests
 uv run ruff check .           # Lint
 uv run mypy deepresearch/     # Type check
 uv run deepresearch --help    # CLI help
-uv run deepresearch run "query" -v            # Debug mode (verbose logging)
-uv run deepresearch run "query" --log-file outputs/run.log  # Persist logs to file
+uv run deepresearch run "query" --stream             # Run with live streaming
+uv run deepresearch run "query" -v --log-file run.log # Debug mode
+uv run deepresearch resume outputs/session_xxx/       # Resume from checkpoint
+uv run deepresearch checkpoints outputs/session_xxx/   # List checkpoints
+uv run deepresearch serve                             # v2: Start web server
 ```
 
 ## 8. Documentation
 
 See [docs/index.md](docs/index.md) for the full documentation index.
 
-- [Design Docs](docs/design/) — project overview, technical route, prompts, roadmap
-- [Architecture Docs](docs/architecture/) — LangGraph design, DeepSeek integration, state schema
-- [Testing Docs](docs/testing/) — strategy, TDD guide, test data conventions
-- [AI Collaboration](docs/ai/) — coding rules, context map, review checklist, execution plan
+- [Roadmap](roadmap.md)
+- [Specs](docs/specs/) — v0 / v1 / v2 design + plan
+- [Architecture](docs/architecture/) — LangGraph workflow, state schema, DeepSeek integration
+- [Design](docs/design/) — prompts, technical route, resume packaging
+- [Testing](docs/testing/) — strategy, TDD guide, test data

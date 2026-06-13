@@ -96,13 +96,17 @@ uv run deepresearch run "调研 Deep Research Agent 的主流架构"
 ## 7. 技术路线总结
 
 ```text
-v0：LangChain + LangGraph + DeepSeek API
+v0：LangChain + LangGraph + DeepSeek API (CLI MVP)
     ↓
-v1：增强搜索、证据抽取、source ranking
+v1：研究质量增强 (Evidence/Citation/Critique) + 工程基础设施 (Checkpoint/Streaming/Observability)
     ↓
-v2：FastAPI + SSE + 可视化过程
+v2：Web 应用化 (FastAPI + Vue 3 + SSE)
     ↓
-v3：多 Research Agent 并发
+v2.1：多 Agent 并发研究 (Paper/GitHub/Blog/Docs agents)
     ↓
-v4：本地知识库 / MCP / RAG 集成
+v3：本地知识库 + RAG + MCP 集成
+    ↓
+v4：生产级增强 (Docker/Redis/PostgreSQL/Auth)
+    ↓
+v5：招聘展示增强 (截图/Demo/Benchmark/面试问答)
 ```

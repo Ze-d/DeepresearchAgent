@@ -9,13 +9,13 @@
 **Tech Stack:** Python 3.11+, LangGraph, LangChain, langchain-deepseek, Typer, Pydantic, duckduckgo-search, pytest, ruff
 
 **Specs:**
-- [项目概述](../../design/00_project_overview.md)
-- [v0 技术路线](../../design/01_v0_technical_route.md)
-- [LangGraph 架构](../../architecture/02_langgraph_architecture.md)
-- [State 与数据结构](../../architecture/04_state_schema.md)
-- [模块边界](../../architecture/module-boundaries.md)
-- [DeepSeek 兼容](../../architecture/03_deepseek_compatibility.md)
-- [Prompt 设计](../../design/05_prompts.md)
+- [项目概述](../architecture/overview.md)
+- [技术路线](../design/technical-route.md)
+- [LangGraph 工作流](../architecture/langgraph-workflow.md)
+- [State 与数据结构](../architecture/state-schema.md)
+- [模块边界](../architecture/overview.md#5-module-boundaries)
+- [DeepSeek 集成](../architecture/deepseek-integration.md)
+- [Prompt 设计](../design/prompts.md)
 
 ---
 
