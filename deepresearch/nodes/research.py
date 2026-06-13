@@ -106,6 +106,15 @@ def make_research_node(llm: BaseChatModel):
                         "title": r.title,
                     })
 
+        # v1: 对 evidences 做语义去重
+        if all_evidences:
+            from deepresearch.evidence.dedup import deduplicate_evidences
+            all_evidences = deduplicate_evidences(all_evidences, llm)
+
+        # v1: 对 sources 做权威度评分排序
+        from deepresearch.evidence.ranking import rank_sources
+        all_sources = rank_sources(all_sources)
+
         logger.info("Research done: %d sources, %d evidences", len(all_sources), len(all_evidences))
 
         return {

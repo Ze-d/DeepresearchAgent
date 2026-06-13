@@ -44,19 +44,43 @@ class TestSummarizerPrompt:
         assert "调研 Deep Research" in content
         assert "研究总结 Agent" in content
 
+    def test_build_messages_has_citation_instruction(self):
+        messages = build_summarizer_messages(
+            user_query="test",
+            research_plan={"research_goal": "test"},
+            evidences=[{"claim": "c1"}],
+        )
+        content = str(messages[0].content)
+        assert "[来源:" in content
+
 
 class TestCritiquePrompt:
-    def test_build_messages(self):
+    def test_build_messages_has_three_dimensions(self):
         messages = build_critique_messages(
             user_query="test query",
             draft_summary="draft content",
             sources=[{"title": "src1"}],
             evidences=[{"claim": "c1"}],
+            prev_critique=None,
         )
         assert len(messages) == 1
         content = str(messages[0].content)
+        assert "fact_check" in content
+        assert "logic_coherence" in content
+        assert "coverage" in content
         assert "研究审稿 Agent" in content
-        assert "pass" in content
+
+    def test_build_messages_includes_prev_critique(self):
+        messages = build_critique_messages(
+            user_query="test",
+            draft_summary="draft",
+            sources=[{"title": "s1"}],
+            evidences=[{"claim": "c1"}],
+            prev_critique={"overall_score": 0.6, "issues": [{"description": "old issue"}]},
+        )
+        content = str(messages[0].content)
+        assert "上一轮" in content
+        assert "old issue" in content
 
 
 class TestFinalizerPrompt:
@@ -71,3 +95,13 @@ class TestFinalizerPrompt:
         content = str(messages[0].content)
         assert "技术报告写作 Agent" in content
         assert "摘要" in content
+
+    def test_build_messages_has_citation_instruction(self):
+        messages = build_finalizer_messages(
+            user_query="test",
+            draft_summary="draft",
+            critique_result={"score": 0.9},
+            sources=[{"title": "s1"}],
+        )
+        content = str(messages[0].content)
+        assert "[来源:" in content

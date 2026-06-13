@@ -134,3 +134,111 @@ def test_research_node_uses_critique_follow_up_queries(monkeypatch):
     node(state)
 
     assert searched_queries == ["targeted follow-up"]
+
+
+def test_research_node_calls_dedup(monkeypatch):
+    """research_node 执行后调用 dedup"""
+    def mock_search(query, max_results):
+        from deepresearch.tools import SearchResult
+        return [SearchResult(title="T", url="https://x.com", snippet="S")]
+
+    def mock_fetch(url, timeout=10.0):
+        return "content"
+
+    monkeypatch.setattr("deepresearch.nodes.research.search_web", mock_search)
+    monkeypatch.setattr("deepresearch.nodes.research.fetch_content", mock_fetch)
+
+    dedup_called = []
+    def mock_dedup(evidences, llm):
+        dedup_called.append(True)
+        return evidences
+
+    monkeypatch.setattr("deepresearch.evidence.dedup.deduplicate_evidences", mock_dedup)
+
+    evidence_json = '{"evidences": [{"claim": "test", "quote": "test", "confidence": 0.9}]}'
+    from tests.fixtures.mock_llm import FakeChatModel
+    llm = FakeChatModel(default_response=evidence_json)
+
+    from deepresearch.nodes.research import make_research_node
+    node = make_research_node(llm)
+
+    state = {
+        "user_query": "test",
+        "research_plan": {
+            "research_goal": "test",
+            "sub_questions": [
+                {"id": "q1", "question": "q", "priority": 1, "search_queries": ["q"]}
+            ],
+            "expected_sections": [],
+            "success_criteria": [],
+        },
+        "search_results": [],
+        "sources": [],
+        "evidences": [],
+        "draft_summary": None,
+        "critique_result": None,
+        "final_report": None,
+        "iteration": 0,
+        "max_iterations": 2,
+        "status": "planned",
+        "errors": [],
+        "citations": [],
+        "iteration_metrics": [],
+        "checkpoint_ref": None,
+    }
+
+    node(state)
+    assert len(dedup_called) > 0
+
+
+def test_research_node_calls_ranking(monkeypatch):
+    """research_node 执行后调用 rank_sources"""
+    def mock_search(query, max_results):
+        return []
+
+    def mock_fetch(url, timeout=10.0):
+        return ""
+
+    monkeypatch.setattr("deepresearch.nodes.research.search_web", mock_search)
+    monkeypatch.setattr("deepresearch.nodes.research.fetch_content", mock_fetch)
+
+    ranking_called = []
+    def mock_ranking(sources):
+        ranking_called.append(True)
+        return sources
+
+    monkeypatch.setattr("deepresearch.evidence.ranking.rank_sources", mock_ranking)
+
+    from tests.fixtures.mock_llm import FakeChatModel
+    llm = FakeChatModel(default_response='{"evidences":[]}')
+
+    from deepresearch.nodes.research import make_research_node
+    node = make_research_node(llm)
+
+    state = {
+        "user_query": "test",
+        "research_plan": {
+            "research_goal": "test",
+            "sub_questions": [
+                {"id": "q1", "question": "q", "priority": 1, "search_queries": ["q"]}
+            ],
+            "expected_sections": [],
+            "success_criteria": [],
+        },
+        "search_results": [],
+        "sources": [],
+        "evidences": [],
+        "draft_summary": None,
+        "critique_result": None,
+        "final_report": None,
+        "iteration": 0,
+        "max_iterations": 2,
+        "status": "planned",
+        "errors": [],
+        "citations": [],
+        "iteration_metrics": [],
+        "checkpoint_ref": None,
+    }
+
+    node(state)
+    assert len(ranking_called) > 0

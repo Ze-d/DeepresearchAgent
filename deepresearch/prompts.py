@@ -97,7 +97,9 @@ def build_summarizer_messages(
 2. 每个关键结论都要基于 evidence。
 3. 标记证据不足的地方。
 4. 不要生成最终报告。
-5. 输出中文 Markdown。"""
+5. 输出中文 Markdown。
+6. 对每个关键结论使用 [来源: 简短标题](URL) 格式标注引用。
+   URL 必须严格来自 evidence 对应的 source url，不得编造。"""
     return [SystemMessage(content=text)]
 
 
@@ -106,8 +108,19 @@ def build_critique_messages(
     draft_summary: str,
     sources: list[dict],
     evidences: list[dict],
+    prev_critique: dict | None = None,
 ) -> list[SystemMessage]:
-    """构建 Critique Prompt。"""
+    """构建增强版 Critique Prompt（v1: 三维度评分 + fix rate 追踪）。"""
+    prev_section = ""
+    if prev_critique:
+        prev_issues = json.dumps(prev_critique.get("issues", []), ensure_ascii=False, indent=2)
+        prev_section = f"""
+上一轮 Critique 结果：
+评分: {prev_critique.get('overall_score', 'N/A')}
+Issues: {prev_issues}
+
+请评估上一轮 issue 的修复情况。"""
+
     text = f"""你是一个严格的研究审稿 Agent。
 
 用户问题：
@@ -121,23 +134,25 @@ def build_critique_messages(
 
 证据：
 {json.dumps(evidences, ensure_ascii=False, indent=2)}
+{prev_section}
 
 任务：
-检查当前总结是否可以作为最终报告。
+从以下三个维度独立评分（每个维度 0-1，≥0.7 为通过）：
 
-检查维度：
-1. 是否回答用户问题。
-2. 是否覆盖主要子问题。
-3. 是否有足够证据。
-4. 是否存在无证据断言。
-5. 是否需要继续搜索。
-6. 是否需要补充新的 search query。
+1. **fact_check（事实核查）**: 每个断言是否有 evidence 支撑？是否存在无来源的主观判断或编造？
+2. **logic_coherence（逻辑一致性）**: 论证链是否自洽？不同部分的结论是否有矛盾？
+3. **coverage（覆盖度）**: 是否回答了研究计划的所有子问题？是否有明显遗漏？
 
 只输出 JSON：
 
 {{
   "pass": false,
-  "score": 0.75,
+  "overall_score": 0.65,
+  "dimensions": {{
+    "fact_check": {{"score": 0.8, "issues": [], "status": "pass"}},
+    "logic_coherence": {{"score": 0.6, "issues": ["发现矛盾"], "status": "fail"}},
+    "coverage": {{"score": 0.55, "issues": ["遗漏子问题"], "status": "fail"}}
+  }},
   "issues": [
     {{
       "type": "insufficient_evidence",
@@ -189,5 +204,7 @@ Critique 结果：
 1. 结论清晰。
 2. 不要夸大证据。
 3. 对证据不足的部分要说明。
-4. 保留参考来源列表。"""
+4. 保留参考来源列表。
+5. 使用 [来源: 简短标题](URL) 格式标注每个关键发现的来源。
+6. 在报告末尾列出所有引用的参考文献。"""
     return [SystemMessage(content=text)]

@@ -62,4 +62,13 @@ def save_all(state: AgentState, session_dir: Path) -> None:
     if final_report:
         save_markdown(final_report, session_dir / "final_report.md")
         count += 1
+    # v1 新增输出
+    citations = state.get("citations")
+    if citations:
+        save_json(citations, session_dir / "citations.json")
+        count += 1
+    iteration_metrics = state.get("iteration_metrics")
+    if iteration_metrics:
+        save_json(iteration_metrics, session_dir / "iteration_metrics.json")
+        count += 1
     logger.info("Saved %d artifacts to %s", count, session_dir)

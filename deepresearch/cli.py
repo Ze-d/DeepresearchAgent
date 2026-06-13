@@ -35,6 +35,9 @@ def _make_initial_state(query: str, max_iterations: int) -> AgentState:
         "max_iterations": max_iterations,
         "status": "initialized",
         "errors": [],
+        "citations": [],
+        "iteration_metrics": [],
+        "checkpoint_ref": None,
     }
 
 
@@ -45,12 +48,17 @@ def run(
     output: str | None = typer.Option(None, "--output", "-o", help="输出文件路径"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="启用 DEBUG 级别日志"),
     log_file: str | None = typer.Option(None, "--log-file", help="日志文件路径"),
+    stream: bool = typer.Option(True, "--stream/--no-stream", help="启用/禁用实时 streaming 展示"),
 ):
     """运行 DeepResearch Agent 完成研究任务。"""
     cfg = Settings()
     log_level = "DEBUG" if verbose else cfg.log_level
     resolved_log_file = log_file or cfg.log_file
     setup_logging(level=log_level, log_file=resolved_log_file)
+
+    if not stream:
+        import deepresearch.config as config_module
+        config_module.settings.stream_enabled = False
 
     logger.info("Starting DeepResearch Agent")
     logger.debug("Query: %s", query)
@@ -59,12 +67,19 @@ def run(
     initial_state = _make_initial_state(query, max_iterations)
 
     graph = build_graph()
-    app_graph = graph.compile()
+
+    from deepresearch.output import init_session_dir, save_all
+    session_dir = init_session_dir()
+    from deepresearch.checkpoint.manager import CheckpointManager
+    cm = CheckpointManager(session_dir)
+    app_graph = graph.compile(checkpointer=cm.saver)
 
     typer.echo(f"🔍 开始研究: {query}")
     typer.echo(f"   最大迭代次数: {max_iterations}")
 
-    result = app_graph.invoke(initial_state)
+    from deepresearch.streaming.renderer import stream_with_rich
+    config = {"configurable": {"thread_id": session_dir.name}}
+    result = stream_with_rich(app_graph, initial_state, config)
 
     final = result.get("final_report", "")
     typer.echo("\n" + "=" * 60)
@@ -77,13 +92,35 @@ def run(
         out_path.write_text(final, encoding="utf-8")
         typer.echo(f"\n📄 报告已保存到: {out_path}")
 
-    plan = result.get("research_plan")
-    critique = result.get("critique_result")
+    # v1 outputs
+    save_all(result, session_dir)
+    from deepresearch.output import save_json
+    metrics = result.get("iteration_metrics", [])
+    if metrics:
+        save_json(metrics, session_dir / "iteration_metrics.json")
+    citations = result.get("citations", [])
+    if citations:
+        save_json(citations, session_dir / "citations.json")
+    cm.save(result, "final")
+
+    # v1 stats
     typer.echo(f"\n📊 迭代次数: {result.get('iteration', 0)}")
+    plan = result.get("research_plan")
     if plan:
         typer.echo(f"   子问题数: {len(plan.get('sub_questions', []))}")
+    critique = result.get("critique_result")
     if critique:
-        typer.echo(f"   Critique 评分: {critique.get('score', 'N/A')}")
+        typer.echo(f"   Critique 评分: {critique.get('overall_score', critique.get('score', 'N/A'))}")
+    iteration_metrics_list = result.get("iteration_metrics", [])
+    if iteration_metrics_list:
+        last_metrics = iteration_metrics_list[-1]
+        fix_rate = last_metrics.get("fix_rate")
+        if fix_rate is not None:
+            typer.echo(f"   Issues 修复率: {fix_rate * 100:.0f}%")
+    sources = result.get("sources", [])
+    evidences = result.get("evidences", [])
+    typer.echo(f"   来源数: {len(sources)}, 证据数: {len(evidences)}")
+    typer.echo(f"   输出目录: {session_dir}")
 
     errors = result.get("errors", [])
     if errors:
@@ -93,3 +130,69 @@ def run(
 
     logger.info("DeepResearch Agent completed")
     typer.echo("✅ 研究完成")
+
+
+@app.command()
+def resume(
+    session_dir: str = typer.Argument(..., help="Session 目录路径"),
+):
+    """从中断 session 恢复执行。"""
+    from pathlib import Path
+    from deepresearch.output import save_all
+
+    sd = Path(session_dir)
+    if not sd.exists():
+        typer.echo(f"❌ Session 目录不存在: {session_dir}")
+        raise typer.Exit(code=1)
+
+    from deepresearch.checkpoint.manager import CheckpointManager
+    cm = CheckpointManager(sd)
+    checkpoints = cm.list_checkpoints()
+    if not checkpoints:
+        typer.echo("❌ 未找到 checkpoint")
+        raise typer.Exit(code=1)
+
+    latest = checkpoints[-1]
+    state = cm.load(latest["id"])
+    if state is None:
+        typer.echo(f"❌ 无法加载 checkpoint: {latest['id']}")
+        raise typer.Exit(code=1)
+
+    typer.echo(f"📂 从 checkpoint 恢复: {latest['id']}")
+    typer.echo(f"   状态: {state.get('status', 'unknown')}")
+    typer.echo(f"   迭代: {state.get('iteration', 0)}")
+
+    graph = build_graph()
+    app_graph = graph.compile(checkpointer=cm.saver)
+    config = {"configurable": {"thread_id": sd.name}}
+
+    from deepresearch.streaming.renderer import stream_with_rich
+    result = stream_with_rich(app_graph, state, config)
+
+    save_all(result, sd)
+    cm.save(result, "final")
+    typer.echo("✅ 恢复执行完成")
+
+
+@app.command()
+def checkpoints(
+    session_dir: str = typer.Argument(..., help="Session 目录路径"),
+):
+    """列出 session 的 checkpoint。"""
+    from pathlib import Path
+    sd = Path(session_dir)
+    if not sd.exists():
+        typer.echo(f"❌ Session 目录不存在: {session_dir}")
+        raise typer.Exit(code=1)
+
+    from deepresearch.checkpoint.manager import CheckpointManager
+    cm = CheckpointManager(sd)
+    cps = cm.list_checkpoints()
+
+    if not cps:
+        typer.echo("(无 checkpoint)")
+        return
+
+    typer.echo(f"Checkpoints ({len(cps)}):")
+    for cp in cps:
+        typer.echo(f"  {cp['id']} — {cp['size_bytes']} bytes")
