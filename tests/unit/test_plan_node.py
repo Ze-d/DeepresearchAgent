@@ -38,6 +38,19 @@ class TestParsePlanJson:
         result = _parse_plan_json('{"research_goal": "only goal"}')
         assert result is None
 
+    def test_parse_non_object_json_returns_none(self):
+        result = _parse_plan_json('["not", "an", "object"]')
+        assert result is None
+
+    def test_parse_invalid_schema_returns_none(self):
+        result = _parse_plan_json(json.dumps({
+            "research_goal": "bad shape",
+            "sub_questions": "not a list",
+            "expected_sections": [],
+            "success_criteria": [],
+        }))
+        assert result is None
+
 
 class TestRunPlanner:
     def test_run_planner_success(self):

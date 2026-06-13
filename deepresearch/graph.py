@@ -40,6 +40,16 @@ def route_after_critique(state: AgentState) -> str:
     return "research"
 
 
+def route_after_plan(state: AgentState) -> str:
+    """Conditional routing: stop the workflow when planning failed."""
+    if state.get("status") == "error" or not state.get("research_plan"):
+        logger.info("Planning failed → ending workflow")
+        return "end"
+
+    logger.info("Planning succeeded → routing to research")
+    return "research"
+
+
 def build_graph(llm: BaseChatModel | None = None) -> StateGraph:
     """构建 DeepResearch Agent StateGraph。
 
@@ -60,7 +70,14 @@ def build_graph(llm: BaseChatModel | None = None) -> StateGraph:
     graph.add_node("final", make_final_node(llm))
 
     graph.add_edge(START, "plan")
-    graph.add_edge("plan", "research")
+    graph.add_conditional_edges(
+        "plan",
+        route_after_plan,
+        {
+            "research": "research",
+            "end": END,
+        },
+    )
     graph.add_edge("research", "summary")
     graph.add_edge("summary", "critique")
 

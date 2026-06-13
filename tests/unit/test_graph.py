@@ -1,6 +1,6 @@
 # tests/unit/test_graph.py
 from tests.fixtures.mock_llm import FakeChatModel
-from deepresearch.graph import build_graph, route_after_critique
+from deepresearch.graph import build_graph, route_after_critique, route_after_plan
 from deepresearch.state import AgentState
 
 PLAN_JSON = '{"research_goal":"test","sub_questions":[{"id":"q1","question":"q","priority":1,"search_queries":["q"]}],"expected_sections":[],"success_criteria":[]}'
@@ -51,6 +51,43 @@ def test_graph_run_mock_full_flow():
 
     assert result["final_report"] is not None
     assert result["status"] == "completed"
+
+
+def test_graph_stops_when_planning_fails():
+    llm = FakeChatModel(default_response="not json")
+    graph = build_graph(llm=llm)
+    app = graph.compile()
+
+    initial_state: AgentState = {
+        "user_query": "测试问题",
+        "research_plan": None,
+        "search_results": [],
+        "sources": [],
+        "evidences": [],
+        "draft_summary": None,
+        "critique_result": None,
+        "final_report": None,
+        "iteration": 0,
+        "max_iterations": 2,
+        "status": "initialized",
+        "errors": [],
+    }
+
+    result = app.invoke(initial_state)
+
+    assert result["status"] == "error"
+    assert result["final_report"] is None
+    assert result["research_plan"] is None
+
+
+def test_graph_routes_to_end_when_plan_errors():
+    state_error: AgentState = {
+        "user_query": "test", "research_plan": None, "search_results": [],
+        "sources": [], "evidences": [], "draft_summary": None,
+        "critique_result": None, "final_report": None, "iteration": 0,
+        "max_iterations": 2, "status": "error", "errors": ["bad plan"],
+    }
+    assert route_after_plan(state_error) == "end"
 
 
 # Keep the route tests (they don't need llm)

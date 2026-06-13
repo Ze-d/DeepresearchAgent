@@ -81,3 +81,56 @@ def test_research_node_handles_no_plan():
     result = node(state)
     assert result["status"] == "error"
     assert len(result["errors"]) > 0
+
+
+def test_research_node_uses_critique_follow_up_queries(monkeypatch):
+    """critique 失败重试时优先使用 critique 提供的补充查询。"""
+    from deepresearch.tools import SearchResult
+
+    searched_queries = []
+
+    def mock_search(query, max_results):
+        searched_queries.append(query)
+        return [SearchResult(title="Follow-up", url="https://example.com", snippet="S")]
+
+    monkeypatch.setattr("deepresearch.nodes.research.search_web", mock_search)
+    monkeypatch.setattr("deepresearch.nodes.research.fetch_content", lambda url, timeout=10.0: "content")
+
+    llm = FakeChatModel(default_response='{"evidences": []}')
+    node = make_research_node(llm)
+
+    state = {
+        "user_query": "test",
+        "research_plan": {
+            "research_goal": "test",
+            "sub_questions": [
+                {
+                    "id": "q1",
+                    "question": "original question",
+                    "priority": 1,
+                    "search_queries": ["original query"],
+                }
+            ],
+            "expected_sections": [],
+            "success_criteria": [],
+        },
+        "search_results": [],
+        "sources": [],
+        "evidences": [],
+        "draft_summary": "draft",
+        "critique_result": {
+            "pass": False,
+            "score": 0.4,
+            "issues": [],
+            "new_search_queries": ["targeted follow-up"],
+        },
+        "final_report": None,
+        "iteration": 1,
+        "max_iterations": 2,
+        "status": "critiqued",
+        "errors": [],
+    }
+
+    node(state)
+
+    assert searched_queries == ["targeted follow-up"]

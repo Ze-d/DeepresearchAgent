@@ -48,7 +48,17 @@ def make_research_node(llm: BaseChatModel):
         all_evidences: list[dict] = []
         all_search_results: list[dict] = []
 
-        sub_questions = plan.get("sub_questions", [])
+        critique = state.get("critique_result") or {}
+        follow_up_queries = critique.get("new_search_queries") or []
+        if critique.get("pass") is False and follow_up_queries:
+            sub_questions = [{
+                "question": state.get("user_query", ""),
+                "priority": 1,
+                "search_queries": follow_up_queries,
+            }]
+        else:
+            sub_questions = plan.get("sub_questions", [])
+
         sorted_qs = sorted(sub_questions, key=lambda q: q.get("priority", 99))
 
         search_count = 0

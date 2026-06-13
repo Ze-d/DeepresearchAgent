@@ -4,7 +4,9 @@ import logging
 import re
 
 from langchain_core.language_models import BaseChatModel
+from pydantic import ValidationError
 
+from deepresearch.state import ResearchPlan
 from deepresearch.state import AgentState
 from deepresearch.prompts import build_planner_messages
 
@@ -28,12 +30,20 @@ def _parse_plan_json(raw: str) -> dict | None:
         logger.warning("Failed to parse plan JSON: %s", raw[:200])
         return None
 
+    if not isinstance(data, dict):
+        logger.warning("Plan JSON must be an object. Got: %s", type(data).__name__)
+        return None
+
     required = {"research_goal", "sub_questions", "expected_sections", "success_criteria"}
     if not required.issubset(data.keys()):
         logger.warning("Plan JSON missing required fields. Got: %s", list(data.keys()))
         return None
 
-    return data
+    try:
+        return ResearchPlan.model_validate(data).model_dump()
+    except ValidationError as exc:
+        logger.warning("Plan JSON failed schema validation: %s", exc)
+        return None
 
 
 def _run_planner(user_query: str, llm: BaseChatModel, max_retries: int = 2) -> dict | None:
