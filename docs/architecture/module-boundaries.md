@@ -13,5 +13,6 @@
 | `nodes.critique` | Critique node logic | `llm`, `state` |
 | `nodes.final` | Final report node | `state` |
 | `llm` | DeepSeek LLM factory | none |
+| `logging` | Centralized log config (console + file) | none |
 | `tools` | Search/web tools | none |
 | `output` | Markdown report writer | `state` |

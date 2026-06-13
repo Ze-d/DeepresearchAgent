@@ -12,6 +12,7 @@ A LangGraph-based DeepResearch Agent powered by DeepSeek API.
 - **Evidence-based summarization** with source tracking
 - **Markdown report** output with intermediate artifacts
 - **CLI-first** design via Typer + Rich
+- **Structured logging** — Rich console output + file persistence, `--verbose` debug mode
 - **SDD+TDD** project structure with pytest and ruff
 
 ## 2. Quick Start
@@ -105,6 +106,7 @@ Built on **LangGraph StateGraph** — all intermediate state (plan, sources, evi
 | LLM framework | LangChain |
 | LLM provider | DeepSeek API (`langchain-deepseek`) |
 | CLI | Typer + Rich |
+| Logging | Rich (RichHandler) + logging |
 | Data modeling | Pydantic + pydantic-settings |
 | Config | python-dotenv (.env) |
 | Search | DuckDuckGo / Tavily (optional) |
@@ -135,8 +137,10 @@ outputs/
 ```bash
 uv run pytest                 # Run all tests
 uv run ruff check .           # Lint
-uv run mypy deepsearch/       # Type check
+uv run mypy deepresearch/     # Type check
 uv run deepresearch --help    # CLI help
+uv run deepresearch run "query" -v            # Debug mode (verbose logging)
+uv run deepresearch run "query" --log-file outputs/run.log  # Persist logs to file
 ```
 
 ## 8. Documentation

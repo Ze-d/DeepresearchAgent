@@ -12,6 +12,7 @@
 - **基于证据的总结** — 每个结论关联来源和证据
 - **Markdown 报告输出** — 保留完整中间产物（plan、sources、evidences、critique）
 - **CLI 优先** — Typer + Rich 命令行体验
+- **结构化日志** — Rich 控制台输出 + 文件持久化，支持 `--verbose` 调试
 - **SDD+TDD 项目结构** — pytest + ruff 测试与代码检查
 
 ## 2. 快速开始
@@ -106,6 +107,7 @@ Critique 节点      — 检查覆盖度、证据质量、遗漏点
 | LLM 框架 | LangChain |
 | LLM 提供商 | DeepSeek API (`langchain-deepseek`) |
 | CLI | Typer + Rich |
+| 日志 | Rich (RichHandler) + logging |
 | 数据建模 | Pydantic + pydantic-settings |
 | 配置管理 | python-dotenv (.env) |
 | 搜索 | DuckDuckGo / Tavily（可选） |
@@ -131,6 +133,14 @@ outputs/
     └── final_report.md        # 最终 Markdown 报告
 ```
 
+可选指定 `--log-file` 时，日志文件也会写入：
+
+```text
+outputs/
+└── session_20260611_001/
+    └── run.log                # 完整 DEBUG 级别运行日志
+```
+
 ## 7. 常用命令
 
 ```bash
@@ -138,6 +148,8 @@ uv run pytest                 # 运行所有测试
 uv run ruff check .           # 代码检查
 uv run mypy deepresearch/     # 类型检查
 uv run deepresearch --help    # CLI 帮助
+uv run deepresearch run "问题" -v           # 调试模式（显示详细日志）
+uv run deepresearch run "问题" --log-file outputs/run.log  # 日志持久化
 ```
 
 ## 8. 文档
