@@ -97,7 +97,9 @@ def build_summarizer_messages(
 2. 每个关键结论都要基于 evidence。
 3. 标记证据不足的地方。
 4. 不要生成最终报告。
-5. 输出中文 Markdown。"""
+5. 输出中文 Markdown。
+6. 对每个关键结论使用 [来源: 简短标题](URL) 格式标注引用。
+   URL 必须严格来自 evidence 对应的 source url，不得编造。"""
     return [SystemMessage(content=text)]
 
 
@@ -202,5 +204,7 @@ Critique 结果：
 1. 结论清晰。
 2. 不要夸大证据。
 3. 对证据不足的部分要说明。
-4. 保留参考来源列表。"""
+4. 保留参考来源列表。
+5. 使用 [来源: 简短标题](URL) 格式标注每个关键发现的来源。
+6. 在报告末尾列出所有引用的参考文献。"""
     return [SystemMessage(content=text)]
