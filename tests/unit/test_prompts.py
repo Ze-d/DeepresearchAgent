@@ -46,17 +46,32 @@ class TestSummarizerPrompt:
 
 
 class TestCritiquePrompt:
-    def test_build_messages(self):
+    def test_build_messages_has_three_dimensions(self):
         messages = build_critique_messages(
             user_query="test query",
             draft_summary="draft content",
             sources=[{"title": "src1"}],
             evidences=[{"claim": "c1"}],
+            prev_critique=None,
         )
         assert len(messages) == 1
         content = str(messages[0].content)
+        assert "fact_check" in content
+        assert "logic_coherence" in content
+        assert "coverage" in content
         assert "研究审稿 Agent" in content
-        assert "pass" in content
+
+    def test_build_messages_includes_prev_critique(self):
+        messages = build_critique_messages(
+            user_query="test",
+            draft_summary="draft",
+            sources=[{"title": "s1"}],
+            evidences=[{"claim": "c1"}],
+            prev_critique={"overall_score": 0.6, "issues": [{"description": "old issue"}]},
+        )
+        content = str(messages[0].content)
+        assert "上一轮" in content
+        assert "old issue" in content
 
 
 class TestFinalizerPrompt:
