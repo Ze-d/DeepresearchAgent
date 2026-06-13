@@ -44,6 +44,15 @@ class TestSummarizerPrompt:
         assert "调研 Deep Research" in content
         assert "研究总结 Agent" in content
 
+    def test_build_messages_has_citation_instruction(self):
+        messages = build_summarizer_messages(
+            user_query="test",
+            research_plan={"research_goal": "test"},
+            evidences=[{"claim": "c1"}],
+        )
+        content = str(messages[0].content)
+        assert "[来源:" in content
+
 
 class TestCritiquePrompt:
     def test_build_messages_has_three_dimensions(self):
@@ -86,3 +95,13 @@ class TestFinalizerPrompt:
         content = str(messages[0].content)
         assert "技术报告写作 Agent" in content
         assert "摘要" in content
+
+    def test_build_messages_has_citation_instruction(self):
+        messages = build_finalizer_messages(
+            user_query="test",
+            draft_summary="draft",
+            critique_result={"score": 0.9},
+            sources=[{"title": "s1"}],
+        )
+        content = str(messages[0].content)
+        assert "[来源:" in content

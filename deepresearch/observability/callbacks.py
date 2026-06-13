@@ -41,21 +41,27 @@ class ObservabilityCallback(BaseCallbackHandler):
     def on_llm_end(self, response: LLMResult, **kwargs: Any) -> None:
         end_time = time.perf_counter()
         # 提取实际 token 用量
+        input_tokens = self._input_tokens
+        output_tokens = 0
         if response.llm_output and "token_usage" in response.llm_output:
             usage = response.llm_output["token_usage"]
-            self._input_tokens = usage.get("prompt_tokens", self._input_tokens)
-            self._output_tokens = usage.get("completion_tokens", 0)
+            input_tokens = usage.get("prompt_tokens", self._input_tokens)
+            output_tokens = usage.get("completion_tokens", 0)
 
         metrics = NodeMetrics(
             node_name=self.node_name,
             start_time=self._start_time,
             end_time=end_time,
-            input_tokens=self._input_tokens,
-            output_tokens=self._output_tokens,
-            llm_calls=self._call_count,
-            errors=self._errors,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            llm_calls=1,  # 每次 on_llm_end 只计 1 次调用（非累积值）
+            errors=list(self._errors),  # 拷贝，避免 re-record 时被外部 extend 影响
         )
         self.collector.record_node(self.node_name, metrics)
+        # 重置 per-call 状态，避免下次被当作累积值使用
+        self._input_tokens = 0
+        self._output_tokens = 0
+        self._call_count = 0
 
     def on_llm_error(self, error: BaseException, **kwargs: Any) -> None:
         self._errors.append(str(error))
