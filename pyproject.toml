@@ -41,6 +41,9 @@ dev = [
 [project.scripts]
 deepresearch = "deepresearch.cli:app"
 
+[tool.setuptools.packages.find]
+include = ["deepresearch*"]
+
 [tool.ruff]
 line-length = 100
 

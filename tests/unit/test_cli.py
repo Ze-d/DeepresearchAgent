@@ -54,3 +54,51 @@ def test_cli_checkpoints_empty(tmp_path):
     session_dir.mkdir()
     result = runner.invoke(app, ["checkpoints", str(session_dir)])
     assert result.exit_code == 0
+
+
+def test_run_workflow_exists():
+    """run_workflow 可从 CLI 模块导入"""
+    from deepresearch.cli import run_workflow
+    assert callable(run_workflow)
+
+
+def test_run_workflow_returns_state(monkeypatch, tmp_path):
+    """run_workflow 用 mock LLM + mock search 返回完整 state"""
+    from deepresearch.cli import run_workflow
+    from tests.fixtures.mock_llm import FakeChatModel
+    from deepresearch.tools import SearchResult
+    import json
+
+    # Mock search
+    def mock_search(query, max_results):
+        return [SearchResult(title="T", url="https://example.com", snippet="S")]
+
+    def mock_fetch(url, timeout=8.0):
+        return "Test content for evidence extraction."
+
+    monkeypatch.setattr("deepresearch.nodes.research.search_web", mock_search)
+    monkeypatch.setattr("deepresearch.nodes.research.fetch_content", mock_fetch)
+
+    # Disable checkpoint to avoid SQLite issues
+    monkeypatch.setattr("deepresearch.checkpoint.manager.settings.checkpoint_enabled", False)
+
+    # Redirect output to tmp_path
+    from deepresearch.config import settings
+    monkeypatch.setattr(settings, "output_dir", str(tmp_path / "outputs"))
+
+    PLAN = json.dumps({
+        "research_goal": "test",
+        "sub_questions": [{"id": "q1", "question": "q", "priority": 1, "search_queries": ["q"]}],
+        "expected_sections": ["s1"],
+        "success_criteria": ["c1"],
+    }, ensure_ascii=False)
+
+    llm = FakeChatModel(default_response=PLAN)
+
+    # Inject mock LLM into graph
+    monkeypatch.setattr("deepresearch.graph.build_llm", lambda: llm)
+
+    result = run_workflow("test query", max_iterations=1)
+    assert result["user_query"] == "test query"
+    assert result["status"] == "completed"
+    assert result["final_report"] is not None
