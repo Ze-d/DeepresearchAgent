@@ -126,8 +126,11 @@ def rank_sources(sources: list[dict]) -> list[dict]:
             2,
         )
 
+        existing_type = src.get("source_type")
+        if existing_type in (None, "unknown", ""):
+            existing_type = type_name
         scored_src = {**src, "score": final_score,
-                      "source_type": src.get("source_type") or type_name}
+                      "source_type": existing_type}
         scored.append(scored_src)
 
     scored.sort(key=lambda s: s["score"], reverse=True)
