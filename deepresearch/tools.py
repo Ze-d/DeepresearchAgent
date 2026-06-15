@@ -39,15 +39,22 @@ class SearchResult:
     snippet: str
 
 
-def search_web(query: str, max_results: int = 5) -> list[SearchResult]:
-    """使用 DuckDuckGo 搜索网页（通过 ddgs 包）。"""
+def search_web(query: str, max_results: int = 5, site_filter: str | None = None) -> list[SearchResult]:
+    """使用 DuckDuckGo 搜索网页（通过 ddgs 包）。
+
+    Args:
+        query: 搜索查询。
+        max_results: 最大结果数。
+        site_filter: 可选站点过滤（追加 "site:xxx" 到查询）。
+    """
     if DDGS is None:
         logger.warning("Neither ddgs nor duckduckgo_search is installed")
         return []
 
+    search_query = f"{query} site:{site_filter}" if site_filter else query
     try:
         with DDGS() as ddgs:
-            raw = list(ddgs.text(query, max_results=max_results))
+            raw = list(ddgs.text(search_query, max_results=max_results))
     except Exception:
         logger.warning("DuckDuckGo search failed for: %s", query)
         return []
