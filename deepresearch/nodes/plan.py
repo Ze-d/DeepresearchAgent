@@ -40,10 +40,18 @@ def _parse_plan_json(raw: str) -> dict | None:
         return None
 
     try:
-        return ResearchPlan.model_validate(data).model_dump()
+        plan = ResearchPlan.model_validate(data).model_dump()
     except ValidationError as exc:
         logger.warning("Plan JSON failed schema validation: %s", exc)
         return None
+
+    # Ensure every sub_question has source_types with valid fallback
+    valid_types = {"paper", "github", "blog", "docs"}
+    for sq in plan.get("sub_questions", []):
+        if "source_types" not in sq:
+            sq["source_types"] = ["blog"]
+        sq["source_types"] = [t for t in sq["source_types"] if t in valid_types] or ["blog"]
+    return plan
 
 
 def _run_planner(user_query: str, llm: BaseChatModel, max_retries: int = 2) -> dict | None:

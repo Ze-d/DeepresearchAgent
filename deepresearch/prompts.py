@@ -18,9 +18,10 @@ def build_planner_messages(user_query: str) -> list[SystemMessage]:
 1. 生成 research_goal。
 2. 拆解为 3-6 个 sub_questions。
 3. 每个 sub_question 给出 2-4 个 search_queries。
-4. 给出 expected_sections。
-5. 给出 success_criteria。
-6. 只输出 JSON，不要输出解释。
+4. 每个 sub_question 指定 source_types 来源类型（可选 "paper", "github", "blog", "docs"，默认 "blog"）。
+5. 给出 expected_sections。
+6. 给出 success_criteria。
+7. 只输出 JSON，不要输出解释。
 
 JSON 格式：
 {{
@@ -30,7 +31,8 @@ JSON 格式：
       "id": "q1",
       "question": "...",
       "priority": 1,
-      "search_queries": ["...", "..."]
+      "search_queries": ["...", "..."],
+      "source_types": ["paper", "blog"]
     }}
   ],
   "expected_sections": ["..."],
