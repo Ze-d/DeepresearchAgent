@@ -51,8 +51,11 @@ class Settings(BaseSettings):
 
     # v2: Server
     server_host: str = "127.0.0.1"
-    server_port: int = 8000
+    server_port: int = 8620
     cors_origins: list[str] = ["http://localhost:5173"]
+
+    # v2.1: Human-in-the-Loop
+    human_review_enabled: bool = False
 
     # LLM 调用参数
     temperature: float = 0.0

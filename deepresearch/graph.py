@@ -10,6 +10,7 @@ from deepresearch.nodes import (
     make_plan_node,
     make_research_agent,
     make_merge_node,
+    make_human_review_node,         # v2.1 Phase 3
     make_summary_node,
     make_critique_node,
     make_final_node,
@@ -104,6 +105,7 @@ def build_graph(llm: BaseChatModel | None = None) -> StateGraph:
     graph.add_node("plan", make_plan_node(llm))
     graph.add_node("research_agent", make_research_agent(llm))
     graph.add_node("merge", make_merge_node(llm))
+    graph.add_node("human_review", make_human_review_node(llm))
     graph.add_node("summary", make_summary_node(llm))
     graph.add_node("critique", make_critique_node(llm))
     graph.add_node("final", make_final_node(llm))
@@ -115,7 +117,8 @@ def build_graph(llm: BaseChatModel | None = None) -> StateGraph:
         path_map=["research_agent"],
     )
     graph.add_edge("research_agent", "merge")
-    graph.add_edge("merge", "summary")
+    graph.add_edge("merge", "human_review")
+    graph.add_edge("human_review", "summary")
     graph.add_edge("summary", "critique")
 
     graph.add_conditional_edges(

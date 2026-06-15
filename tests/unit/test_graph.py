@@ -17,7 +17,7 @@ def test_graph_nodes_registered():
     llm = FakeChatModel(default_response=PLAN_JSON)
     graph = build_graph(llm=llm)
     node_names = set(graph.nodes.keys())
-    assert node_names == {"plan", "research_agent", "merge", "summary", "critique", "final"}
+    assert node_names == {"plan", "research_agent", "merge", "human_review", "summary", "critique", "final"}
 
 
 def test_graph_run_mock_full_flow():
