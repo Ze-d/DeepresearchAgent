@@ -22,6 +22,12 @@ class CreateTaskRequest(BaseModel):
     max_iterations: int = 2
 
 
+class ReviewRequest(BaseModel):
+    action: str  # "approve" | "amend" | "redo"
+    notes: str = ""
+    new_queries: list[str] = []
+
+
 # ——— POST /api/tasks ———
 
 
@@ -170,3 +176,26 @@ def delete_task(task_id: str):
     """删除任务。"""
     if not task_manager.delete(task_id):
         raise HTTPException(status_code=404, detail="Task not found")
+
+
+# ——— POST /api/tasks/{id}/review ———
+
+
+@router.post("/tasks/{task_id}/review")
+def submit_review(task_id: str, req: ReviewRequest):
+    """提交人工审核结果。"""
+    task = task_manager.get(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    # Update task with review decision
+    task_manager.update(task_id,
+        status=TaskStatus.RUNNING.value,
+        review_decision={
+            "action": req.action,
+            "notes": req.notes,
+            "new_queries": req.new_queries,
+        })
+
+    logger.info("Review submitted for task %s: action=%s", task_id, req.action)
+    return {"status": "ok", "task_id": task_id, "action": req.action}

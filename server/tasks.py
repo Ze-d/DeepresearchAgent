@@ -10,6 +10,7 @@ class TaskStatus(str, Enum):
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
+    REVIEW_REQUIRED = "review_required"  # v2.1 Phase 3
 
 
 class TaskManager:
