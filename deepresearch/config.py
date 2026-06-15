@@ -49,6 +49,11 @@ class Settings(BaseSettings):
     # v1: Observability
     metrics_enabled: bool = True
 
+    # v2: Server
+    server_host: str = "127.0.0.1"
+    server_port: int = 8000
+    cors_origins: list[str] = ["http://localhost:5173"]
+
     # LLM 调用参数
     temperature: float = 0.0
     max_retries: int = 2

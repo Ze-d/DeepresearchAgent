@@ -8,12 +8,15 @@
 - **LangGraph** 状态编排，支持条件路由和迭代循环
 - **LangChain** 统一管理 Prompt、LLM、Tool 和结构化输出
 - **DeepSeek API** 接入，通过 `langchain-deepseek` 集成
-- **Critique 驱动迭代** — 自动检查报告质量并补充研究
-- **基于证据的总结** — 每个结论关联来源和证据
-- **Markdown 报告输出** — 保留完整中间产物（plan、sources、evidences、critique）
+- **Critique 驱动迭代** — 三维度评分（事实核查/逻辑一致性/覆盖度）
+- **Evidence 质量管理** — 语义去重 + 来源权威度评分
+- **Citation 管理** — 内联引用提取 + 参考文献格式化
+- **Streaming 输出** — Rich 控制台实时渲染
+- **Checkpoint 持久化** — SqliteSaver + JSON 快照 + 中断恢复
+- **Observability** — 每节点 Token/延迟/错误统计
+- **Markdown 报告输出** — 保留完整中间产物
 - **CLI 优先** — Typer + Rich 命令行体验
-- **结构化日志** — Rich 控制台输出 + 文件持久化，支持 `--verbose` 调试
-- **SDD+TDD 项目结构** — pytest + ruff 测试与代码检查
+- **v2: Web 界面** — FastAPI + Vue 3 + SSE 实时可视化
 
 ## 2. 快速开始
 
@@ -29,50 +32,51 @@ uv run deepresearch run "调研 Deep Research Agent 的主流架构"
 
 ```text
 DeepresearchAgent/
-├── AGENTS.md                  # AI 助手指令
-├── CLAUDE.md                  # 项目 AI 协作规范
-├── README.md                  # 英文说明
-├── README_zh.md               # 本文件
-├── pyproject.toml             # 项目元数据与依赖
-├── .env.example               # 环境变量模板
+├── AGENTS.md
+├── CLAUDE.md
+├── README.md
+├── README_zh.md
+├── roadmap.md
+├── pyproject.toml
+├── .env.example
 │
 ├── deepresearch/              # Python 源码包
-│   └── __init__.py
+│   ├── config.py              # pydantic-settings 配置
+│   ├── state.py               # Pydantic 模型 + AgentState
+│   ├── llm.py                 # DeepSeek LLM 工厂
+│   ├── prompts.py             # Prompt 模板集中管理
+│   ├── graph.py               # LangGraph StateGraph
+│   ├── cli.py                 # Typer CLI 入口
+│   ├── tools.py               # 搜索 + 网页内容抽取
+│   ├── output.py              # Session 目录 + JSON/MD 写入
+│   ├── logging.py             # 结构化日志
+│   ├── nodes/                 # Plan / Research / Summary / Critique / Final
+│   ├── evidence/              # 语义去重 + 来源权威度评分
+│   ├── citation/              # Citation 提取 + 格式化
+│   ├── checkpoint/            # SqliteSaver 管理
+│   ├── streaming/             # Rich Live 渲染器
+│   └── observability/         # Callbacks + 指标收集器
+│
+├── server/                    # v2: FastAPI 后端
+│   ├── __init__.py
+│   ├── tasks.py
+│   ├── stream.py
+│   └── routes.py
+│
+├── web/                       # v2: Vue 3 + Vite 前端
+│   └── src/components/
 │
 ├── docs/
-│   ├── index.md               # 文档索引（顶层仅此文件）
-│   ├── design/                # 设计与规划文档
-│   │   ├── 00_project_overview.md   # 项目概述
-│   │   ├── 01_v0_technical_route.md # v0 技术路线
-│   │   ├── 05_prompts.md            # Prompt 设计
-│   │   ├── 07_resume_packaging.md   # 简历包装
-│   │   └── 08_roadmap.md            # 路线图
-│   ├── architecture/          # 架构与数据模型文档
-│   │   ├── overview.md              # 架构概览
-│   │   ├── module-boundaries.md     # 模块边界
-│   │   ├── 02_langgraph_architecture.md # LangGraph 架构
-│   │   ├── 03_deepseek_compatibility.md # DeepSeek 兼容设计
-│   │   ├── 04_state_schema.md       # 状态与数据结构
-│   │   └── adr/                     # 架构决策记录
-│   ├── testing/               # 测试策略与指南
-│   │   ├── testing-strategy.md
-│   │   ├── tdd-guide.md
-│   │   └── test-data.md
-│   ├── ai/                    # AI 协作文档
-│   │   ├── coding-rules.md
-│   │   ├── context-map.md
-│   │   ├── review-checklist.md
-│   │   └── 06_claude_code_execution_plan.md
-│   └── specs/                 # 按功能模块的 spec（待开发时添加）
+│   ├── index.md
+│   ├── specs/                 # v0 / v1 / v2 设计 + 计划
+│   ├── architecture/          # 概览 / LangGraph / State / DeepSeek
+│   ├── design/                # 技术路线 / Prompt / 简历
+│   ├── testing/               # 测试策略 / TDD 指南 / 测试数据
+│   ├── ai/                    # 编码规范 / 上下文地图
+│   └── workflows/             # CI/CD
 │
 ├── tests/
-│   ├── conftest.py            # 共享 fixtures
-│   ├── unit/                  # 单元测试
-│   ├── integration/           # 集成测试
-│   └── fixtures/              # 测试数据
-│
-├── scripts/                   # 构建/测试/部署脚本
-└── .github/workflows/         # CI/CD 流水线
+└── .github/workflows/
 ```
 
 ## 4. 架构设计
@@ -86,7 +90,7 @@ Research 节点      — 执行搜索，抽取来源和证据
   ↓
 Summary 节点       — 基于证据生成阶段总结
   ↓
-Critique 节点      — 检查覆盖度、证据质量、遗漏点
+Critique 节点      — 三维度评分（事实核查/逻辑一致性/覆盖度）
   ↓
 条件路由
     ├── 继续研究   →  Research 节点（最多 max_iterations 轮）
@@ -116,6 +120,8 @@ Critique 节点      — 检查覆盖度、证据质量、遗漏点
 | 测试 | pytest |
 | 代码检查 | ruff |
 | 类型检查 | mypy |
+| v2 后端 | FastAPI + SSE |
+| v2 前端 | Vue 3 + Vite |
 
 ## 6. 输出结构
 
@@ -123,22 +129,19 @@ Critique 节点      — 检查覆盖度、证据质量、遗漏点
 
 ```text
 outputs/
-└── session_20260611_001/
-    ├── plan.json              # 研究计划和子问题
-    ├── search_results.json    # 原始搜索结果
-    ├── sources.json           # 整理后的来源列表
-    ├── evidences.json         # 抽取的证据条目
-    ├── draft_summary.md       # 阶段总结草稿
-    ├── critique.json          # Critique 评分与问题列表
-    └── final_report.md        # 最终 Markdown 报告
-```
-
-可选指定 `--log-file` 时，日志文件也会写入：
-
-```text
-outputs/
-└── session_20260611_001/
-    └── run.log                # 完整 DEBUG 级别运行日志
+└── session_20260613_001/
+    ├── plan.json
+    ├── search_results.json
+    ├── sources.json
+    ├── evidences.json
+    ├── draft_summary.md
+    ├── critique.json
+    ├── final_report.md
+    ├── citations.json
+    ├── iteration_metrics.json
+    ├── metrics.json
+    ├── checkpoint.db
+    └── run.log
 ```
 
 ## 7. 常用命令
@@ -148,15 +151,19 @@ uv run pytest                 # 运行所有测试
 uv run ruff check .           # 代码检查
 uv run mypy deepresearch/     # 类型检查
 uv run deepresearch --help    # CLI 帮助
-uv run deepresearch run "问题" -v           # 调试模式（显示详细日志）
-uv run deepresearch run "问题" --log-file outputs/run.log  # 日志持久化
+uv run deepresearch run "问题" --stream             # 实时流式运行
+uv run deepresearch run "问题" -v --log-file run.log # 调试模式
+uv run deepresearch resume outputs/session_xxx/      # 从中断恢复
+uv run deepresearch checkpoints outputs/session_xxx/  # 列出 checkpoint
+uv run deepresearch serve                            # v2: 启动 Web 服务
 ```
 
 ## 8. 文档
 
 完整文档索引见 [docs/index.md](docs/index.md)。
 
-- [设计文档](docs/design/) — 项目概述、技术路线、Prompt、路线图
-- [架构文档](docs/architecture/) — LangGraph 设计、DeepSeek 集成、数据模型
-- [测试文档](docs/testing/) — 测试策略、TDD 指南、测试数据规范
-- [AI 协作](docs/ai/) — 编码规范、上下文地图、审查清单、执行计划
+- [路线图](roadmap.md)
+- [Specs](docs/specs/) — v0 / v1 / v2 设计 + 实施计划
+- [架构文档](docs/architecture/) — 概览、LangGraph 工作流、状态模型、DeepSeek 集成
+- [设计文档](docs/design/) — 技术路线、Prompt、简历包装
+- [测试文档](docs/testing/) — 策略、TDD 指南、测试数据

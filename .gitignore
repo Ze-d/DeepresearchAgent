@@ -5,6 +5,7 @@ venv/
 .env
 *.log
 dist/
+node_modules/
 *.egg-info/
 .ruff_cache/
 .mypy_cache/

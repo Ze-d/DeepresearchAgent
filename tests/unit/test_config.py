@@ -96,3 +96,26 @@ def test_v1_config_from_env(monkeypatch):
     assert s.checkpoint_enabled is False
     assert s.stream_enabled is False
     assert s.metrics_enabled is False
+
+
+def test_v2_server_defaults(monkeypatch):
+    """v2 server 配置项默认值正确"""
+    for key in ("DEEPSEEK_API_KEY", "DEEPSEEK_MODEL", "MAX_ITERATIONS",
+                "MAX_SEARCH_RESULTS", "OUTPUT_DIR", "TEMPERATURE", "MAX_RETRIES"):
+        monkeypatch.delenv(key, raising=False)
+    from deepresearch.config import Settings
+    s = Settings()
+    assert s.server_host == "127.0.0.1"
+    assert s.server_port == 8000
+    assert s.cors_origins == ["http://localhost:5173"]
+
+
+def test_v2_server_from_env(monkeypatch):
+    """v2 server 配置项可从环境变量读取"""
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-test")
+    monkeypatch.setenv("SERVER_HOST", "0.0.0.0")
+    monkeypatch.setenv("SERVER_PORT", "8080")
+    from deepresearch.config import Settings
+    s = Settings()
+    assert s.server_host == "0.0.0.0"
+    assert s.server_port == 8080
