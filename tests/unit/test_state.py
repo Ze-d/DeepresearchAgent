@@ -41,6 +41,7 @@ class TestSubQuestion:
             "question": "test",
             "priority": 2,
             "search_queries": ["query1"],
+            "source_types": ["blog"],
         }
 
 
@@ -392,3 +393,43 @@ class TestAgentState:
         state["iteration"] = 1
         assert state["research_plan"] is not None
         assert state["iteration"] == 1
+
+
+def test_sub_question_has_source_types():
+    """SubQuestion 支持 source_types 字段，默认值为 ["blog"]"""
+    from deepresearch.state import SubQuestion
+    sq = SubQuestion(id="q1", question="test", priority=1, search_queries=["q"])
+    assert sq.source_types == ["blog"]
+
+    sq2 = SubQuestion(id="q2", question="test", priority=2,
+                      search_queries=["q"], source_types=["paper", "github"])
+    assert sq2.source_types == ["paper", "github"]
+
+
+def test_agent_state_has_v2_1_fields():
+    """AgentState 包含 v2.1 新增字段 agent_outputs 和 merge_summary"""
+    from deepresearch.state import AgentState
+    state: AgentState = {
+        "user_query": "test",
+        "research_plan": None,
+        "search_results": [],
+        "sources": [],
+        "evidences": [],
+        "draft_summary": None,
+        "critique_result": None,
+        "final_report": None,
+        "iteration": 0,
+        "max_iterations": 2,
+        "status": "initialized",
+        "errors": [],
+        "citations": [],
+        "iteration_metrics": [],
+        "checkpoint_ref": None,
+        # v2.1 新增
+        "agent_outputs": [],
+        "merge_summary": None,
+        "human_review": None,
+    }
+    assert state["agent_outputs"] == []
+    assert state["merge_summary"] is None
+    assert state["human_review"] is None

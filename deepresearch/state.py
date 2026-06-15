@@ -12,6 +12,7 @@ class SubQuestion(BaseModel):
     question: str
     priority: int
     search_queries: list[str]
+    source_types: list[str] = ["blog"]  # v2.1 新增
 
 
 class ResearchPlan(BaseModel):
@@ -140,3 +141,7 @@ class AgentState(TypedDict):
     citations: list[dict[str, Any]]
     iteration_metrics: list[dict[str, Any]]
     checkpoint_ref: str | None
+    # v2.1 新增
+    agent_outputs: list[dict[str, Any]]   # 每个 Agent 的中间产出
+    merge_summary: dict[str, Any] | None  # MergeSummary dict
+    human_review: dict[str, Any] | None   # 人工审核结果
