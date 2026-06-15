@@ -428,3 +428,34 @@ class TestAgentState:
         state["iteration"] = 1
         assert state["research_plan"] is not None
         assert state["iteration"] == 1
+
+
+class TestMergeSummary:
+    def test_create_default(self):
+        """MergeSummary 默认值正确"""
+        from deepresearch.state import MergeSummary
+        ms = MergeSummary()
+        assert ms.total_sources == 0
+        assert ms.total_evidences == 0
+        assert ms.cross_validated_count == 0
+        assert ms.unique_findings_per_agent == {}
+        assert ms.conflicts == []
+        assert ms.source_bias_warnings == []
+        assert ms.coverage_gaps == []
+
+    def test_create_full(self):
+        """MergeSummary 完整字段创建正确"""
+        from deepresearch.state import MergeSummary
+        ms = MergeSummary(
+            total_sources=10,
+            total_evidences=25,
+            cross_validated_count=8,
+            unique_findings_per_agent={"paper": 4, "blog": 6},
+            conflicts=[{"topic": "test", "severity": "minor", "positions": {}}],
+            source_bias_warnings=["5/25 条证据仅来自单一来源"],
+            coverage_gaps=[],
+        )
+        assert ms.total_sources == 10
+        assert ms.cross_validated_count == 8
+        assert len(ms.conflicts) == 1
+        assert ms.unique_findings_per_agent["paper"] == 4

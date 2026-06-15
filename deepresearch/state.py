@@ -123,6 +123,20 @@ class FinalReport(BaseModel):
     limitations: list[str]
 
 
+# ——— v2.1: Merge 质量报告 ———
+
+
+class MergeSummary(BaseModel):
+    """v2.1: Merge 节点的质量报告，汇总并行 Agent 产出的交叉验证结果。"""
+    total_sources: int = 0
+    total_evidences: int = 0
+    cross_validated_count: int = 0
+    unique_findings_per_agent: dict[str, int] = {}
+    conflicts: list[dict[str, Any]] = []
+    source_bias_warnings: list[str] = []
+    coverage_gaps: list[str] = []
+
+
 # ——— AgentState (LangGraph TypedDict) ———
 
 
