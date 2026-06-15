@@ -14,7 +14,8 @@ from deepresearch.state import AgentState
 
 PLAN_JSON = (
     '{"research_goal":"test",'
-    '"sub_questions":[{"id":"q1","question":"q","priority":1,"search_queries":["q"]}],'
+    '"sub_questions":[{"id":"q1","question":"q","priority":1,'
+    '"search_queries":["q"],"source_types":["blog"]}],'
     '"expected_sections":[],"success_criteria":[]}'
 )
 EVIDENCE_JSON = '{"evidences":[]}'
@@ -41,7 +42,12 @@ class SmartFakeLLM(FakeChatModel):
 
         if "研究规划 Agent" in content:
             text = PLAN_JSON
-        elif "研究资料分析 Agent" in content:
+        elif any(tag in content for tag in [
+            "学术研究分析专家",      # paper  profile
+            "开源代码分析专家",      # github profile
+            "技术博客分析专家",      # blog   profile
+            "技术文档分析专家",      # docs   profile
+        ]):
             text = EVIDENCE_JSON
         elif "研究总结 Agent" in content:
             text = SUMMARY
@@ -74,6 +80,12 @@ _BASE_STATE: AgentState = {
     "citations": [],
     "iteration_metrics": [],
     "checkpoint_ref": None,
+    # v2.1 新增
+    "agent_outputs": [],
+    "merge_summary": None,
+    "human_review": None,
+    "agent_profile": None,
+    "sub_question": None,
 }
 
 
@@ -82,12 +94,12 @@ def _mock_search(monkeypatch):
     from deepresearch.tools import SearchResult
 
     monkeypatch.setattr(
-        "deepresearch.nodes.research.search_web",
-        lambda q, max_results: [SearchResult(title="T", url="https://x.com", snippet="S")],
+        "deepresearch.nodes.research_agent.search_web",
+        lambda query, max_results=5, site_filter=None: [SearchResult(title="T", url="https://x.com", snippet="S")],
     )
     monkeypatch.setattr(
-        "deepresearch.nodes.research.fetch_content",
-        lambda url, timeout=10.0: "content",
+        "deepresearch.nodes.research_agent.fetch_content",
+        lambda url, timeout=8.0: "content",
     )
 
 
@@ -116,6 +128,9 @@ def test_full_workflow_with_mock(monkeypatch):
     # v1 状态验证
     assert "citations" in result
     assert "iteration_metrics" in result
+    # v2.1 状态验证
+    assert "agent_outputs" in result
+    assert "merge_summary" in result
 
 
 def test_workflow_output_files(monkeypatch, tmp_path):
@@ -152,6 +167,13 @@ def test_workflow_iteration_cap(monkeypatch):
 
             if "研究规划 Agent" in content:
                 text = PLAN_JSON
+            elif any(tag in content for tag in [
+                "学术研究分析专家",
+                "开源代码分析专家",
+                "技术博客分析专家",
+                "技术文档分析专家",
+            ]):
+                text = EVIDENCE_JSON
             elif "研究审稿 Agent" in content:
                 text = CRITIQUE_FAIL  # always fail
             elif "技术报告写作 Agent" in content:
@@ -172,3 +194,13 @@ def test_workflow_iteration_cap(monkeypatch):
     # 即使 critique 一直 fail，max_iterations=1 也应强制走到 final
     assert result["final_report"] is not None
     assert result["iteration"] <= result["max_iterations"]
+
+
+def test_v2_1_merge_node_produces_merge_summary(monkeypatch):
+    """V2.1 工作流：merge_node 生成 merge_summary"""
+    _mock_search(monkeypatch)
+    app = _build_compiled_graph()
+    result = app.invoke(dict(_BASE_STATE))
+    assert result["merge_summary"] is not None
+    assert result["merge_summary"]["total_sources"] > 0
+    assert "unique_findings_per_agent" in result["merge_summary"]
