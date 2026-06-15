@@ -5,7 +5,7 @@ from deepresearch.nodes.research_agent import make_research_agent  # v2.1
 from deepresearch.nodes.summary import make_summary_node
 from deepresearch.nodes.critique import make_critique_node
 from deepresearch.nodes.final import make_final_node
-# from deepresearch.nodes.merge import make_merge_node               # v2.1 — enabled in Task 21.3
+from deepresearch.nodes.merge import make_merge_node               # v2.1
 
 __all__ = [
     "make_plan_node",
@@ -14,5 +14,5 @@ __all__ = [
     "make_summary_node",
     "make_critique_node",
     "make_final_node",
-    # "make_merge_node",    # v2.1 — enabled in Task 21.3
+    "make_merge_node",    # v2.1
 ]
