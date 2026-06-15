@@ -1,0 +1,89 @@
+<h2>多 Agent 并发架构：哪种实现方式？</h2>
+<p class="subtitle">核心问题：4 个 Agent 如何在 LangGraph 中并行执行</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>方案A：LangGraph Send API 并行扇出（纯 LangGraph）</h3>
+      <p>使用 LangGraph 的 <code>Send</code> API 将每个 source_type 的子问题发送到对应的 agent 节点，自动并行执行。完全在图内调度。</p>
+      <pre style="background:#f8f8f8;padding:8px;border-radius:4px;font-size:0.8rem;margin-top:6px">
+graph.add_node("plan", plan_node)
+graph.add_node("researcher", researcher_node)  ← 单节点，4实例并行
+graph.add_conditional_edges("plan", fanout_to_researchers,
+    path_map={"paper","github","blog","docs"})
+graph.add_node("merge", merge_node)
+graph.add_edge("researcher", "merge")
+      </pre>
+      <div class="pros-cons">
+        <div class="pros"><h4>优点</h4><ul><li>纯 LangGraph，不引入额外框架</li><li>Checkpoint 天然支持 — SqliteSaver 直接可用</li><li>LangGraph Studio 可视化调试</li><li>与现有 graph.py 结构一致</li></ul></div>
+        <div class="cons"><h4>缺点</h4><ul><li>Send API 有一定学习曲线</li><li>4个 agent 共用同一个 LLM 配置</li><li>扇出数固定（4个类型）不够灵活</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>方案B：Python 并发 + LangGraph 节点（混合式）</h3>
+      <p>Research 节点内部使用 <code>concurrent.futures.ThreadPoolExecutor</code> 或 <code>asyncio.gather</code> 并行调用 4 个 Agent 函数，合并结果后返回给图。</p>
+      <pre style="background:#f8f8f8;padding:8px;border-radius:4px;font-size:0.8rem;margin-top:6px">
+# research_node 内部：
+with ThreadPoolExecutor(max_workers=4) as pool:
+    futures = {
+        pool.submit(paper_agent, sq): "paper",
+        pool.submit(github_agent, sq): "github",
+        ...
+    }
+    results = [f.result() for f in as_completed(futures)]
+# 合并 -> return state update
+      </pre>
+      <div class="pros-cons">
+        <div class="pros"><h4>优点</h4><ul><li>实现简单直接</li><li>Agent 数量灵活，可按 source_type 动态创建</li><li>Graph 结构变化最小</li></ul></div>
+        <div class="cons"><h4>缺点</h4><ul><li>LangGraph 感知不到并发 — checkpoint 粒度粗</li><li>Streaming 困难 — 只能报告整体完成</li><li>错误隔离弱 — 一个 agent 崩溃影响全部</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>方案C：工具化 Agent（扩展 tools.py）</h3>
+      <p>不改变图结构，把 4 个 Agent 实现为 LangChain Tool，由现有的 Research 节点通过 Tool-calling 选择调用哪个/哪些。</p>
+      <pre style="background:#f8f8f8;padding:8px;border-radius:4px;font-size:0.8rem;margin-top:6px">
+tools = [
+    arxiv_search_tool,    # Paper Agent
+    github_search_tool,   # GitHub Agent
+    blog_search_tool,     # Blog Agent
+    docs_search_tool,     # Official Docs Agent
+]
+llm_with_tools = llm.bind_tools(tools)
+# LLM 自行决定调用哪些工具
+      </pre>
+      <div class="pros-cons">
+        <div class="pros"><h4>优点</h4><ul><li>对现有架构几乎零改动</li><li>LLM 自动决策用哪个工具</li><li>扩展新 Agent = 加一个 Tool</li></ul></div>
+        <div class="cons"><h4>缺点</h4><ul><li>LLM 决策不稳定 — 可能漏掉重要来源</li><li>Tool calling 是顺序的 — 不是真正的并发</li><li>Agent 逻辑受限于 Tool 接口</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>推荐</h3>
+  <div style="background:#e8f5e9;padding:12px 16px;border-radius:8px;border-left:4px solid #28a745;">
+    <strong>方案 A</strong> — LangGraph Send API 是 v2.1 正确方向。<br/>
+    理由：与现有 StateGraph/Checkpoint/Streaming 体系一致，LangGraph 原生支持并行执行和细粒度状态追踪。后续 Phase 2（交叉验证）和 Phase 3（人工审核）也能在此架构上自然扩展。
+  </div>
+</div>
+
+<hr style="margin:20px 0;">
+
+<h2>回顾：已确认的决策</h2>
+<div style="background:#f0f7ff;padding:12px 16px;border-radius:8px;border-left:4px solid #1a73e8;">
+<strong>优先级：三者兼顾分阶段推进</strong>
+<ol>
+<li><strong>Phase 1 — 并发研究</strong>（速度）：4 Agent 并行扇出</li>
+<li><strong>Phase 2 — 交叉验证</strong>（质量）：结果合并 + 冲突裁决</li>
+<li><strong>Phase 3 — 人工审核</strong>（可控性）：Human-in-the-Loop 节点</li>
+</ol>
+</div>

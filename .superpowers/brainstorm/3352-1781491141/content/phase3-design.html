@@ -1,0 +1,182 @@
+<h2>Phase 3 设计：Human-in-the-Loop 审核节点</h2>
+<p class="subtitle">在自动化流程中插入人工把关，实现可控的 DeepResearch</p>
+
+<hr style="margin:16px 0;">
+
+<h3>1. 审核节点位置（推荐）</h3>
+
+<pre style="background:#1e1e1e;color:#d4d4d4;padding:16px;border-radius:8px;font-size:0.82rem;line-height:1.6;">
+Plan --> research_agent × 4 --> <span style="color:#569cd6;">Merge</span>
+                                     │
+                                     ▼
+                          ┌──────────────────────┐
+                          │  <span style="color:#f44747;">🛑 Human Review</span>      │
+                          │  (interrupt before)   │
+                          │                        │
+                          │  审核内容:              │
+                          │  • MergeSummary        │
+                          │  • 所有 Sources        │
+                          │  • 所有 Evidences      │
+                          │  • Conflicts 列表      │
+                          │  • Coverage Gaps       │
+                          └──────────┬───────────┘
+                                     │
+                    ┌────────────────┼────────────────┐
+                    ▼                ▼                ▼
+               <span style="color:#4ec9b0;">✅ Approve</span>     <span style="color:#dcdcaa;">📝 Amend</span>     <span style="color:#f44747;">🔄 Re-do</span>
+               继续 Critique    补充搜索/修改   回到 Research
+</pre>
+
+<h3>2. 实现机制：LangGraph interrupt()</h3>
+
+<pre style="background:#f8f8f8;padding:12px;border-radius:6px;font-size:0.82rem;">
+# nodes/human_review.py (新增)
+
+from langgraph.types import interrupt
+
+def make_human_review_node(llm):
+    def human_review_node(state: AgentState) -> dict:
+        """暂停执行，等待人工输入。"""
+        merge_summary = state.get("merge_summary", {})
+
+        # LangGraph interrupt: 暂停图执行，向外部暴露审核界面
+        human_decision = interrupt({
+            "action": "review_requested",
+            "merge_summary": merge_summary,
+            "sources": state.get("sources", []),
+            "evidences": state.get("evidences", []),
+            "conflicts": merge_summary.get("conflicts", []),
+            "prompt": "请审核研究结果，选择 approve / amend / redo",
+        })
+
+        # human_decision 来自外部输入
+        return {
+            "human_review": human_decision,
+            "status": f"reviewed_{human_decision['action']}",
+        }
+
+    return human_review_node
+</pre>
+
+<h3>3. 三种审核动作</h3>
+
+<div class="options">
+  <div class="option">
+    <div class="letter">✅</div>
+    <div class="content">
+      <h4>Approve（批准）</h4>
+      <p>审核通过，继续执行 Critique → Final。</p>
+      <code>{"action": "approve", "notes": "信息充分，可以继续"}</code>
+    </div>
+  </div>
+  <div class="option">
+    <div class="letter">📝</div>
+    <div class="content">
+      <h4>Amend（补充）</h4>
+      <p>提出额外搜索查询或修改建议，回 Research 阶段补充后再审核。</p>
+      <code>{"action": "amend", "new_queries": ["补充搜索...", "深入调研..."], "notes": "缺少性能对比数据"}</code>
+    </div>
+  </div>
+  <div class="option">
+    <div class="letter">🔄</div>
+    <div class="content">
+      <h4>Redo（重做）</h4>
+      <p>拒绝当前结果，修改研究方向后重新执行整个流程。</p>
+      <code>{"action": "redo", "revised_plan": {...}, "reason": "方向完全错误"}</code>
+    </div>
+  </div>
+</div>
+
+<h3>4. API 暴露</h3>
+
+<pre style="background:#f8f8f8;padding:12px;border-radius:6px;font-size:0.82rem;">
+# server/routes.py — 新增 endpoint
+
+@router.post("/api/tasks/{task_id}/review")
+def submit_review(task_id: str, decision: ReviewDecision):
+    """
+    提交人工审核结果，恢复被 interrupt 的图执行。
+
+    Request Body:
+      {"action": "approve" | "amend" | "redo",
+       "notes": "...",
+       "new_queries": [...],       // amend 时需要
+       "revised_plan": {...}}      // redo 时需要
+    """
+    # 将 decision 注入到 graph 的 interrupt 恢复点
+    graph_manager.resume(task_id, decision.dict())
+    return {"status": "resumed"}
+</pre>
+
+<h3>5. 前端交互（Vue）</h3>
+
+<pre style="background:#f8f8f8;padding:12px;border-radius:6px;font-size:0.82rem;">
+# TaskDetail.vue — SSE 事件处理增强
+
+# 新 SSE 事件:
+event: review_required
+data: {
+  "merge_summary": {...},
+  "sources": [...],
+  "evidences": [...],
+  "conflicts": [...]
+}
+
+# 前端收到后展示 ReviewPanel 组件:
+#  - 研究结果摘要
+#  - Sources 表格（可多选拒绝）
+#  - Evidences 列表（可标记不可信）
+#  - Conflicts 高亮显示
+#  - 三个按钮: [✅ 批准] [📝 补充搜索] [🔄 重做]
+#  - 补充查询输入框
+</pre>
+
+<h3>6. 变更清单</h3>
+
+<div class="mockup">
+<table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
+<tr style="background:#f0f0f0;">
+  <th style="padding:8px;text-align:left;">模块</th><th style="padding:8px;text-align:left;">类型</th><th style="padding:8px;text-align:left;">变更内容</th>
+</tr>
+<tr>
+  <td style="padding:8px;"><code>nodes/human_review.py</code></td>
+  <td style="padding:8px;"><span class="badge" style="background:#d4edda;color:#155724;">新增</span></td>
+  <td style="padding:8px;">make_human_review_node() — interrupt 暂停 + 审核输入处理</td>
+</tr>
+<tr>
+  <td style="padding:8px;"><code>graph.py</code></td>
+  <td style="padding:8px;"><span class="badge" style="background:#fff3cd;color:#856404;">修改</span></td>
+  <td style="padding:8px;">在 merge 和 summary 之间插入 human_review 节点</td>
+</tr>
+<tr>
+  <td style="padding:8px;"><code>server/routes.py</code></td>
+  <td style="padding:8px;"><span class="badge" style="background:#fff3cd;color:#856404;">修改</span></td>
+  <td style="padding:8px;">新增 POST /api/tasks/{id}/review endpoint</td>
+</tr>
+<tr>
+  <td style="padding:8px;"><code>web/.../ReviewPanel.vue</code></td>
+  <td style="padding:8px;"><span class="badge" style="background:#d4edda;color:#155724;">新增</span></td>
+  <td style="padding:8px;">审核面板：sources/evidences/conflicts 展示 + 决策按钮</td>
+</tr>
+<tr>
+  <td style="padding:8px;"><code>web/.../TaskDetail.vue</code></td>
+  <td style="padding:8px;"><span class="badge" style="background:#fff3cd;color:#856404;">修改</span></td>
+  <td style="padding:8px;">新增 review_required SSE 事件处理</td>
+</tr>
+</table>
+</div>
+
+<div class="section">
+<h3>7. 可选性设计</h3>
+<pre style="background:#f8f8f8;padding:12px;border-radius:6px;font-size:0.82rem;">
+# 通过 API 参数控制是否启用
+POST /api/tasks {query, max_iterations, human_review: true}  ← 默认 false
+
+# 通过配置控制
+# deepresearch/config.py
+human_review_enabled: bool = False  # 全局默认关闭
+
+# 由用户任务级别覆盖
+</pre>
+<p style="margin-top:8px;color:#666;">Human Review 是可选的 — 默认走全自动路径（跳过审核节点），只有显式开启时才触发。</p>
+</div>

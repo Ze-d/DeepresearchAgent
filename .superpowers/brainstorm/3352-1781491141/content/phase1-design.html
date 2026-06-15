@@ -1,0 +1,143 @@
+<h2>Phase 1 设计：多 Agent 并发研究</h2>
+<p class="subtitle">基于已确认的决策：LangGraph Send API + 统一节点策略注入 + Plan 节点 LLM 分类</p>
+
+<hr style="margin:16px 0;">
+
+<h3>1. Graph 拓扑变更</h3>
+
+<div class="section">
+<pre style="background:#1e1e1e;color:#d4d4d4;padding:16px;border-radius:8px;font-size:0.82rem;line-height:1.6;">
+START --> <span style="color:#569cd6;">plan</span> (增强：输出 source_types)
+
+<span style="color:#569cd6;">plan</span> --[fanout: Send API]--> <span style="color:#4ec9b0;">research_agent</span> × N  (并发执行)
+    ├── profile: "paper"  ─── DuckDuckGo + site:arxiv.org
+    ├── profile: "github" ─── DuckDuckGo + site:github.com
+    ├── profile: "blog"   ─── DuckDuckGo (技术博客偏向)
+    └── profile: "docs"   ─── DuckDuckGo + site:docs.* (官方文档偏向)
+
+<span style="color:#4ec9b0;">research_agent</span> × N --[barrier: all complete]--> <span style="color:#569cd6;">merge</span> (新增节点)
+
+<span style="color:#569cd6;">merge</span> --> <span style="color:#569cd6;">summary</span> (复用v2)
+<span style="color:#569cd6;">summary</span> --> <span style="color:#569cd6;">critique</span> (复用v2)
+<span style="color:#569cd6;">critique</span> --[pass/fail]--> <span style="color:#569cd6;">final</span> | loop back
+<span style="color:#569cd6;">final</span> --> END
+</pre>
+</div>
+
+<h3>2. 新增/修改模块</h3>
+
+<div class="mockup">
+<table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
+<tr style="background:#f0f0f0;">
+  <th style="padding:8px;text-align:left;">模块</th><th style="padding:8px;text-align:left;">类型</th><th style="padding:8px;text-align:left;">变更内容</th>
+</tr>
+<tr>
+  <td style="padding:8px;"><code>deepresearch/nodes/plan.py</code></td>
+  <td style="padding:8px;"><span class="badge" style="background:#fff3cd;color:#856404;">修改</span></td>
+  <td style="padding:8px;">ResearchPlan.SubQuestion 新增 source_types 字段；Plan prompt 新增分类指令</td>
+</tr>
+<tr>
+  <td style="padding:8px;"><code>deepresearch/nodes/research_agent.py</code></td>
+  <td style="padding:8px;"><span class="badge" style="background:#d4edda;color:#155724;">新增</span></td>
+  <td style="padding:8px;">统一的 make_research_agent(llm) 节点工厂 + AgentProfile 数据类</td>
+</tr>
+<tr>
+  <td style="padding:8px;"><code>deepresearch/nodes/merge.py</code></td>
+  <td style="padding:8px;"><span class="badge" style="background:#d4edda;color:#155724;">新增</span></td>
+  <td style="padding:8px;">make_merge_node(llm) — 合并并行结果 + 去重 + 排序</td>
+</tr>
+<tr>
+  <td style="padding:8px;"><code>deepresearch/graph.py</code></td>
+  <td style="padding:8px;"><span class="badge" style="background:#fff3cd;color:#856404;">修改</span></td>
+  <td style="padding:8px;">新拓扑：Send API 扇出 + research_agent + merge 替换原 research 节点</td>
+</tr>
+<tr>
+  <td style="padding:8px;"><code>deepresearch/state.py</code></td>
+  <td style="padding:8px;"><span class="badge" style="background:#fff3cd;color:#856404;">修改</span></td>
+  <td style="padding:8px;">SubQuestion 新增 source_types；状态新增 agent_outputs 字段</td>
+</tr>
+<tr>
+  <td style="padding:8px;"><code>deepresearch/tools.py</code></td>
+  <td style="padding:8px;"><span class="badge" style="background:#fff3cd;color:#856404;">修改</span></td>
+  <td style="padding:8px;">search_web 支持 site: 过滤器参数</td>
+</tr>
+</table>
+</div>
+
+<div class="section">
+<h3>3. AgentProfile 配置（关键抽象）</h3>
+<pre style="background:#f8f8f8;padding:12px;border-radius:6px;font-size:0.82rem;">
+AGENT_PROFILES = {
+    "paper": {
+        "name": "学术论文 Agent",
+        "search_modifiers": ["site:arxiv.org", "paper", "journal", "conference"],
+        "system_prompt": "你是学术论文研究员，专注于从arXiv和学术来源提取信息...",
+        "evidence_instruction": "提取论文的: 方法、实验设计、关键数据、局限性",
+    },
+    "github": {
+        "name": "代码仓库 Agent",
+        "search_modifiers": ["site:github.com", "repo", "implementation", "source code"],
+        "system_prompt": "你是代码仓库研究员，专注于从GitHub等技术平台提取信息...",
+        "evidence_instruction": "提取项目的: star数、活跃度、技术栈、README要点",
+    },
+    "blog": {
+        "name": "技术博客 Agent",
+        "search_modifiers": ["blog", "tutorial", "实践", "对比", "评测"],
+        "system_prompt": "你是技术博客研究员，专注于从技术博客提取实践经验...",
+        "evidence_instruction": "提取博文的: 实践观点、对比结论、踩坑经验",
+    },
+    "docs": {
+        "name": "官方文档 Agent",
+        "search_modifiers": ["official documentation", "API reference", "官方文档"],
+        "system_prompt": "你是官方文档研究员，专注于从官方来源提取权威信息...",
+        "evidence_instruction": "提取文档的: 官方定义、版本信息、用法示例、限制说明",
+    },
+}
+</pre>
+</div>
+
+<div class="section">
+<h3>4. 核心代码草图</h3>
+<pre style="background:#f8f8f8;padding:12px;border-radius:6px;font-size:0.82rem;">
+# graph.py — Send API 扇出
+
+def fanout_to_agents(state: AgentState):
+    """根据每个 sub_question 的 source_types 创建并行 Send"""
+    sends = []
+    for sq in state["research_plan"]["sub_questions"]:
+        for st in sq.get("source_types", ["blog"]):  # 默认 blog
+            sends.append(Send("research_agent", {
+                "agent_profile": st,
+                "sub_question": sq,
+            }))
+    return sends
+
+def build_graph(llm=None):
+    graph = StateGraph(AgentState)
+    graph.add_node("plan", make_plan_node(llm))
+    graph.add_node("research_agent", make_research_agent(llm))  # 统一节点
+    graph.add_node("merge", make_merge_node(llm))
+    graph.add_node("summary", make_summary_node(llm))
+    graph.add_node("critique", make_critique_node(llm))
+    graph.add_node("final", make_final_node(llm))
+
+    graph.add_edge(START, "plan")
+    graph.add_conditional_edges("plan", fanout_to_agents, path_map=["research_agent"])
+    graph.add_edge("research_agent", "merge")   # Send自动barrier
+    graph.add_edge("merge", "summary")
+    # ... 其余不变
+    return graph
+</pre>
+</div>
+
+<div class="section">
+<h3>5. 与 v2 的兼容性保证</h3>
+<ul style="line-height:1.8;">
+<li>✅ <strong>run_workflow()</strong> 签名不变 — CLI/Server 无需改动</li>
+<li>✅ <strong>State 向后兼容</strong> — 新增字段有默认值</li>
+<li>✅ <strong>Summary/Critique/Final</strong> 节点零改动</li>
+<li>✅ <strong>SSE Streaming</strong> — Send API 支持 stream_mode="updates"，每个 Agent 完成时推送事件</li>
+<li>✅ <strong>Checkpoint</strong> — SqliteSaver 兼容并行节点</li>
+<li>✅ <strong>v1/v2 tests</strong> — 预期全部通过</li>
+</ul>
+</div>

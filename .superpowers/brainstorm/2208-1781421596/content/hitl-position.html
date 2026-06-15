@@ -1,0 +1,57 @@
+<h2>Human-in-the-Loop 审核节点放在工作流的哪个位置？</h2>
+<p class="subtitle">三种方案各有不同的控制粒度和延迟代价</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>方案A：Plan 之后审核（事前把关）</h3>
+      <p>Plan 生成后暂停，人工审核研究计划和子问题分配，通过后再执行多 Agent 研究。</p>
+      <pre style="background:#f8f8f8;padding:8px;border-radius:4px;font-size:0.8rem;margin-top:6px">
+Plan → <strong style="color:#1a73e8">[HITL审核]</strong> → Research(并发) → Merge → Critique → Final
+      </pre>
+      <div class="pros-cons">
+        <div class="pros"><h4>优点</h4><ul><li>低成本 — 评审计划比评审全文快得多</li><li>预防浪费 — 避免 Research 做错方向</li><li>适合多轮迭代场景</li></ul></div>
+        <div class="cons"><h4>缺点</h4><ul><li>人工需要理解子问题才能有效审核</li><li>审核时看不到实际结果</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>方案B：Merge 之后审核（事后把关）</h3>
+      <p>多 Agent 研究完成后，所有证据汇总后暂停，人工审阅+补充，再进入 Critique 和 Final。</p>
+      <pre style="background:#f8f8f8;padding:8px;border-radius:4px;font-size:0.8rem;margin-top:6px">
+Plan → Research(并发) → Merge → <strong style="color:#1a73e8">[HITL审核]</strong> → Critique → Final
+      </pre>
+      <div class="pros-cons">
+        <div class="pros"><h4>优点</h4><ul><li>看到全貌再做判断 — 信息最充分</li><li>可以标记不足、追加搜索</li><li>可拒绝低质量 source</li></ul></div>
+        <div class="cons"><h4>缺点</h4><ul><li>审核材料多（sources + evidences + draft）</li><li>如果审核不通过，可能浪费已完成的 Research</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>方案C：Critique 之后审核（最终把关）</h3>
+      <p>完整走完 Plan→Research→Merge→Critique，最后让人审批最终报告，决定是否发布、修改或重来。</p>
+      <pre style="background:#f8f8f8;padding:8px;border-radius:4px;font-size:0.8rem;margin-top:6px">
+Plan → Research(并发) → Merge → Critique → <strong style="color:#1a73e8">[HITL审核]</strong> → Final/Re-do
+      </pre>
+      <div class="pros-cons">
+        <div class="pros"><h4>优点</h4><ul><li>自动化最大化 — 只在最后验证</li><li>Critique 提供评审参考</li><li>适合对自动化质量有信心的场景</li></ul></div>
+        <div class="cons"><h4>缺点</h4><ul><li>如果 Critique 出问题，所有工作白费</li><li>审核效率低 — 需要通读完整报告</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>也可以组合使用</h3>
+  <pre style="background:#f8f8f8;padding:8px;border-radius:4px;font-size:0.8rem;text-align:center">
+Plan → <strong>HITL-A</strong>(可选) → Research → Merge → <strong>HITL-B</strong>(可选) → Critique → Final
+  </pre>
+  <p style="margin-top:8px; color:#666;">支持多个审核节点，但每个节点是否启用由用户通过 API 参数控制</p>
+</div>

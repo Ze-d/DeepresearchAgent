@@ -1,0 +1,108 @@
+<h2>V2.1 多 Agent 并发研究 — 当前架构 vs 目标架构概览</h2>
+<p class="subtitle">请先看看现状，准备回答几个决策性问题</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">当前 v2 架构（顺序执行）</div>
+    <div class="mockup-body" style="font-size:0.85rem; line-height:1.8;">
+      <pre style="background:#f4f4f4; padding:12px; border-radius:6px; font-size:0.8rem;">
+START
+  │
+  ▼
+┌─────────┐
+│  Plan   │  1个LLM → 分解为sub_questions
+└────┬────┘
+     ▼
+┌──────────┐
+│ Research │  顺序搜索 → 顺序抓取 → 顺序提取
+│  (单线程) │  DuckDuckGo × N → httpx × M → LLM提取
+└────┬─────┘
+     ▼
+┌─────────┐
+│ Summary │  综合 evidence → draft
+└────┬────┘
+     ▼
+┌──────────┐
+│ Critique │  3维评分 → pass/fail
+└────┬─────┘  ←── fail时循环回Research
+     ▼
+┌────────┐
+│ Final  │  生成最终报告
+└────────┘
+     ▼
+   END</pre>
+      <p style="margin-top:8px; color:#dc3545; font-weight:600;">⏱ 瓶颈：Research节点全串行</p>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">V2.1 目标架构（并发多Agent）</div>
+    <div class="mockup-body" style="font-size:0.85rem; line-height:1.8;">
+      <pre style="background:#f4f4f4; padding:12px; border-radius:6px; font-size:0.8rem;">
+START
+  │
+  ▼
+┌─────────┐
+│  Plan   │ 分类sub_question → 路由
+└────┬────┘
+     │
+     ▼  (并行扇出)
+┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐
+│ Paper  │ │ GitHub │ │  Blog  │ │ Docs   │
+│ Agent  │ │ Agent  │ │ Agent  │ │ Agent  │
+│(arXiv) │ │(repo)  │ │(tech)  │ │(official)│
+└───┬────┘ └───┬────┘ └───┬────┘ └───┬────┘
+     │          │          │          │
+     └──────────┴──────────┴──────────┘
+                    │
+                    ▼  (扇入合并)
+            ┌──────────────┐
+            │  Merge Node  │  去重 + 交叉验证
+            └──────┬───────┘
+                   ▼
+            ┌────────────┐
+            │ Human Review│  人工审核节点
+            │ (可选)      │  审批/拒绝/补充
+            └──────┬─────┘
+                   ▼
+            ┌───────────┐
+            │ Critique  │  增强critique（覆盖度+交叉验证）
+            └─────┬─────┘  ←── 循环同v2
+                  ▼
+            ┌────────┐
+            │ Final  │
+            └────────┘</pre>
+      <p style="margin-top:8px; color:#28a745; font-weight:600;">⚡ 并行加速 + 多来源覆盖 + 人工把关</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>关键变化</h3>
+  <div class="options">
+    <div class="option" data-choice="key-changes">
+      <div class="letter">1</div>
+      <div class="content">
+        <p><strong>Research 节点拆分：</strong>从单一 research_node 拆为 4 个专业化 Agent，每个 Agent 有自己的搜索策略和关键词偏好</p>
+      </div>
+    </div>
+    <div class="option" data-choice="key-changes">
+      <div class="letter">2</div>
+      <div class="content">
+        <p><strong>并行执行：</strong>Plan 节点输出时标记 sub_question 的 source_type，Research 阶段按 source_type 并行扇出</p>
+      </div>
+    </div>
+    <div class="option" data-choice="key-changes">
+      <div class="letter">3</div>
+      <div class="content">
+        <p><strong>结果合并：</strong>新增 Merge 节点负责去重、交叉验证、冲突裁决</p>
+      </div>
+    </div>
+    <div class="option" data-choice="key-changes">
+      <div class="letter">4</div>
+      <div class="content">
+        <p><strong>Human-in-the-Loop：</strong>在 Critique 前插入可选的人工审核节点，支持审批/拒绝/补充指令</p>
+      </div>
+    </div>
+  </div>
+</div>
