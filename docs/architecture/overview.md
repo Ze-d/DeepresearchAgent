@@ -48,6 +48,51 @@ Finalizer outputs Markdown report
 - No long-running background tasks
 - No enterprise permission system
 
+## 2.1 v2 Web 应用 (Complete)
+
+v2 adds FastAPI + Vue 3 frontend on top of v1 infrastructure:
+
+```text
+Browser (Vue 3 + Vite)
+  │  SSE (text/event-stream)
+  ▼
+FastAPI Server (server/)
+  ├── POST /api/tasks       创建任务 → 后台运行
+  ├── GET  /api/tasks/{id}  查询任务状态/结果
+  ├── GET  /api/tasks/{id}/stream  SSE 事件流
+  ├── GET  /api/tasks/{id}/report  下载报告
+  ├── GET  /api/tasks        任务列表
+  └── DELETE /api/tasks/{id} 删除任务
+```
+
+## 2.2 v2.1 多 Agent 并发研究 (Complete)
+
+v2.1 replaces the single-threaded research node with 4 parallel agents using LangGraph Send API:
+
+```text
+Plan (LLM 分类 source_types)
+  │
+  ▼  Send API 扇出 (并行)
+┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐
+│  Paper   │ │  GitHub  │ │   Blog   │ │   Docs   │
+│  Agent   │ │  Agent   │ │  Agent   │ │  Agent   │
+│ (arXiv)  │ │  (repo)  │ │  (tech)  │ │(official)│
+└────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘
+     └─────────────┴────────────┴────────────┘
+                         │  auto-barrier
+                         ▼
+                  Merge (三阶段流水线)
+                         │
+                   [Human Review]  ← 可选 interrupt
+                         │
+                   Summary → Critique → Final
+```
+
+Key additions:
+- **AgentProfile** — unified node + strategy injection (4 profiles)
+- **Merge node** — collect, cross-validate, conflict detect, rank, quality report
+- **Human-in-the-Loop** — LangGraph interrupt() with approve/amend/redo actions
+
 ## 3. Tech Stack
 
 | Category | Technology |
@@ -94,17 +139,20 @@ Finalizer outputs Markdown report
 | `prompts` | Centralized ChatPromptTemplate definitions | none |
 | `tools` | Search + web content extraction tools | none |
 | `output` | Session directory + JSON/MD writer | `state`, `config` |
-| `nodes.plan` | Plan node — decompose question → research plan | `llm`, `prompts`, `state` |
-| `nodes.research` | Research node — search + evidence extraction | `llm`, `tools`, `state`, `prompts` |
+| `nodes.plan` | Plan node — decompose question → research plan, classify source_types | `llm`, `prompts`, `state` |
+| `nodes.research` | (v2) Research node — search + evidence extraction (v2.1 replaced by research_agent) | `llm`, `tools`, `state`, `prompts` |
+| `nodes.research_agent` | (v2.1) Unified research agent node — AgentProfile strategy injection | `llm`, `tools`, `state`, `prompts` |
+| `nodes.merge` | (v2.1) Merge node — 3-stage pipeline: collect, cross-validate, quality report | `llm`, `state`, `evidence`, `config` |
+| `nodes.human_review` | (v2.1) Human-in-the-Loop review node — LangGraph interrupt() | `llm`, `state`, `config` |
 | `nodes.summary` | Summary node — synthesize evidence | `llm`, `prompts`, `state` |
 | `nodes.critique` | Critique node — 3D scoring + fix rate | `llm`, `prompts`, `state` |
 | `nodes.final` | Final report node — format output | `llm`, `prompts`, `state` |
-| `evidence` | Evidence dedup + source ranking | `llm`, `config` |
+| `evidence` | Evidence dedup + source ranking + cross-validation (v2.1) | `llm`, `config` |
 | `citation` | Citation extraction + formatting | none |
 | `checkpoint` | SqliteSaver wrapper + JSON snapshots | `state`, `config` |
 | `streaming` | Rich Live rendering for graph streaming | `config` |
 | `observability` | LangChain callbacks + metrics collector | none |
-| `server` | FastAPI + SSE + task management | `graph`, `state`, `checkpoint`, `output` |
+| `server` | FastAPI + SSE + task management + HITL review endpoint (v2.1) | `graph`, `state`, `checkpoint`, `output` |
 
 ## 6. Source Code Structure
 
@@ -124,13 +172,17 @@ deepresearch/
 │   ├── __init__.py
 │   ├── plan.py
 │   ├── research.py
+│   ├── research_agent.py    # v2.1: AgentProfile + unified agent node
+│   ├── merge.py             # v2.1: 3-stage merge pipeline
+│   ├── human_review.py      # v2.1: LangGraph interrupt HITL
 │   ├── summary.py
 │   ├── critique.py
 │   └── final.py
 ├── evidence/
 │   ├── __init__.py
 │   ├── dedup.py
-│   └── ranking.py
+│   ├── ranking.py
+│   └── cross_validate.py    # v2.1: cross-agent verification
 ├── citation/
 │   ├── __init__.py
 │   ├── extractor.py
@@ -146,17 +198,28 @@ deepresearch/
     ├── callbacks.py
     └── metrics.py
 
-server/                     # v2: FastAPI backend
+server/                     # v2: FastAPI backend (v2.1: +HITL review endpoint)
 ├── __init__.py
 ├── tasks.py
 ├── stream.py
 └── routes.py
 
-web/                        # v2: Vue 3 frontend
+web/                        # v2: Vue 3 frontend (v2.1: +ReviewPanel)
 ├── src/
 │   ├── App.vue
 │   ├── main.js
+│   ├── api/index.js
 │   └── components/
+│       ├── TaskForm.vue
+│       ├── TaskList.vue
+│       ├── TaskDetail.vue
+│       ├── ProgressPanel.vue
+│       ├── PlanCard.vue
+│       ├── SourcesTable.vue
+│       ├── EvidenceList.vue
+│       ├── CritiqueDashboard.vue
+│       ├── FinalReport.vue
+│       └── ReviewPanel.vue    # v2.1: HITL review panel
 ├── index.html
 ├── vite.config.js
 └── package.json
