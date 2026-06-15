@@ -33,6 +33,7 @@ class Source(BaseModel):
     content: str | None = None
     source_type: str = "unknown"
     score: float = 0.0
+    source_agent: str = "unknown"  # v2.1: which agent found this source
 
 
 class Evidence(BaseModel):
@@ -41,6 +42,7 @@ class Evidence(BaseModel):
     claim: str
     quote: str | None = None
     confidence: float = 0.0
+    source_agent: str = "unknown"  # v2.1: which agent found this evidence
 
 
 # ——— Critique ———
@@ -145,3 +147,5 @@ class AgentState(TypedDict):
     agent_outputs: list[dict[str, Any]]   # 每个 Agent 的中间产出
     merge_summary: dict[str, Any] | None  # MergeSummary dict
     human_review: dict[str, Any] | None   # 人工审核结果
+    agent_profile: str | None             # research_agent 的 profile key（Send API 注入）
+    sub_question: dict[str, Any] | None   # 单个 sub_question（Send API 注入）

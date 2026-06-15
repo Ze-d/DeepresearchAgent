@@ -108,4 +108,8 @@ class TestResearchAgentNode:
         }
         node(state)
         assert len(searched_queries) > 0
-        assert any("transformer architecture" in q for q in searched_queries)
+        query = searched_queries[0]
+        assert "transformer architecture" in query
+        # Paper agent modifiers should be appended
+        assert "site:arxiv.org" in query
+        assert "site:scholar.google.com" in query
