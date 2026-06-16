@@ -74,6 +74,18 @@ class _FileSpanExporter:
         self._file.close()
 
 
+# ——— 优雅关闭 ———
+
+
+def _shutdown_provider(provider: Any) -> None:
+    """atexit handler：flush 未导出的 span 并关闭 provider。"""
+    try:
+        provider.force_flush(2000)
+        provider.shutdown()
+    except Exception:
+        pass
+
+
 # ——— 工具函数追踪包装 ———
 
 
@@ -181,16 +193,52 @@ def setup_otel() -> bool:
 
     provider = TracerProvider()
 
-    # 1. OTLP HTTP 导出器（生产）
+    # 1. OTLP HTTP 导出器（生产）—— 带连通性预检
+    otlp_skipped = False
     try:
-        otlp = OTLPSpanExporter(endpoint=settings.otel_endpoint)
-        provider.add_span_processor(BatchSpanProcessor(otlp))
-        logger.info("OTel: OTLP exporter configured → %s", settings.otel_endpoint)
+        # 快速连通性检查：避免 collector 不可达时 BatchSpanProcessor
+        # 后台线程反复重试产生 ERROR 噪音日志。
+        _check_endpoint = settings.otel_endpoint.rstrip("/") + "/"
+        try:
+            import urllib.request
+            req = urllib.request.Request(_check_endpoint, method="HEAD")
+            urllib.request.urlopen(req, timeout=3)
+            reachable = True
+        except Exception:
+            reachable = False
+
+        if not reachable:
+            logger.info(
+                "OTel: OTLP collector unreachable at %s — skipping OTLP export "
+                "(use console/file export for development)",
+                settings.otel_endpoint,
+            )
+            otlp_skipped = True
+        else:
+            otlp = OTLPSpanExporter(
+                endpoint=settings.otel_endpoint,
+                timeout=5,
+            )
+            provider.add_span_processor(
+                BatchSpanProcessor(
+                    otlp,
+                    export_timeout_millis=5000,
+                    max_export_batch_size=64,
+                    max_queue_size=256,
+                )
+            )
+            logger.info("OTel: OTLP exporter configured → %s", settings.otel_endpoint)
     except Exception:
-        logger.warning(
-            "OTel: Failed to create OTLP exporter for %s", settings.otel_endpoint,
-            exc_info=True,
-        )
+        if not otlp_skipped:
+            logger.warning(
+                "OTel: Failed to create OTLP exporter for %s",
+                settings.otel_endpoint,
+                exc_info=True,
+            )
+
+    # 注册 atexit 优雅关闭，避免进程退出时 BatchSpanProcessor 报错
+    if not otlp_skipped:
+        atexit.register(_shutdown_provider, provider)
 
     # 2. Console 导出器（开发）
     if settings.otel_console_export:

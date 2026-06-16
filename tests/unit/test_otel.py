@@ -45,10 +45,18 @@ def otel_handler(in_memory_exporter):
 
 
 @pytest.fixture(autouse=True)
-def _reset_otel_state(in_memory_exporter):
-    """重置应用层 OTel 状态标志，并清空 exporter。"""
+def _reset_otel_state(in_memory_exporter, monkeypatch):
+    """重置应用层 OTel 状态标志，并清空 exporter。
+
+    每个测试独立启用 OTel（覆盖 conftest.py 中的全局禁用）。
+    """
     import deepresearch.observability.otel as otel_mod
     import deepresearch.observability.otel_callback as cb_mod
+
+    # 对本模块所有测试启用 OTel
+    monkeypatch.setattr("deepresearch.config.settings.otel_enabled", True)
+    monkeypatch.setattr("deepresearch.config.settings.otel_console_export", False)
+    monkeypatch.setattr("deepresearch.config.settings.otel_file_export", None)
 
     otel_mod._initialized = False
     otel_mod._tools_patched = False
@@ -395,12 +403,13 @@ class TestWorkflowSpan:
         assert attrs["gen_ai.operation.name"] == "deepresearch"
         assert attrs["deepresearch.query"] == "test query"
 
-    def test_workflow_span_disabled(self):
+    def test_workflow_span_disabled(self, monkeypatch):
         """OTel 未启用时 workflow_span 静默返回 None。"""
         from deepresearch.observability.otel import workflow_span
         import deepresearch.observability.otel as otel_mod
 
         otel_mod._initialized = False
+        monkeypatch.setattr("deepresearch.config.settings.otel_enabled", False)
 
         with workflow_span("test") as span:
             assert span is None
