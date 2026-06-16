@@ -4,7 +4,7 @@ from pathlib import Path
 
 import typer
 
-from deepresearch.config import Settings
+from deepresearch.config import Settings, settings
 from deepresearch.graph import build_graph
 from deepresearch.logging import setup_logging
 from deepresearch.state import AgentState
@@ -60,7 +60,13 @@ def run_workflow(query: str, max_iterations: int = 2) -> dict:
     app_graph = graph.compile(checkpointer=cm.saver)
     config = {"configurable": {"thread_id": session_dir.name}}
 
-    result = app_graph.invoke(initial_state, config)
+    # OTel: 包裹 workflow 根 span
+    if settings.otel_enabled:
+        from deepresearch.observability.otel import workflow_span
+        with workflow_span(query):
+            result = app_graph.invoke(initial_state, config)
+    else:
+        result = app_graph.invoke(initial_state, config)
 
     save_all(result, session_dir)
     cm.save(result, "final")
@@ -120,7 +126,13 @@ def run(
 
         from deepresearch.streaming.renderer import stream_with_rich
         config = {"configurable": {"thread_id": session_dir.name}}
-        result = stream_with_rich(app_graph, initial_state, config)
+        # OTel: 包裹 workflow 根 span
+        if settings.otel_enabled:
+            from deepresearch.observability.otel import workflow_span
+            with workflow_span(query):
+                result = stream_with_rich(app_graph, initial_state, config)
+        else:
+            result = stream_with_rich(app_graph, initial_state, config)
 
         final = result.get("final_report") or ""
         typer.echo("\n" + "=" * 60)

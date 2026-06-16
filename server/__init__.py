@@ -15,12 +15,21 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """应用生命周期：启动/关闭日志。"""
+    """应用生命周期：启动/关闭日志，初始化 OTel。"""
     logger.info(
         "DeepResearch Server starting on %s:%d",
         settings.server_host,
         settings.server_port,
     )
+    # OTel 初始化（幂等）
+    if settings.otel_enabled:
+        try:
+            from deepresearch.observability.otel import setup_otel
+            setup_otel()
+        except ImportError:
+            logger.warning("OTel packages not installed; tracing disabled")
+        except Exception:
+            logger.warning("OTel setup failed; tracing disabled", exc_info=True)
     yield
     logger.info("DeepResearch Server shutting down")
 

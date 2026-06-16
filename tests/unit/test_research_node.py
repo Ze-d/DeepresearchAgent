@@ -17,8 +17,8 @@ def test_research_node_with_mock_search(monkeypatch):
     def mock_fetch(url, timeout=10.0):
         return "Deep research agents use multi-step workflows."
 
-    monkeypatch.setattr("deepresearch.nodes.research.search_web", mock_search)
-    monkeypatch.setattr("deepresearch.nodes.research.fetch_content", mock_fetch)
+    monkeypatch.setattr("deepresearch.tools.search_web", mock_search)
+    monkeypatch.setattr("deepresearch.tools.fetch_content", mock_fetch)
 
     evidence_json = '{"evidences": [{"claim": "test claim", "quote": "test quote", "confidence": 0.9}]}'
     llm = FakeChatModel(default_response=evidence_json)
@@ -93,8 +93,8 @@ def test_research_node_uses_critique_follow_up_queries(monkeypatch):
         searched_queries.append(query)
         return [SearchResult(title="Follow-up", url="https://example.com", snippet="S")]
 
-    monkeypatch.setattr("deepresearch.nodes.research.search_web", mock_search)
-    monkeypatch.setattr("deepresearch.nodes.research.fetch_content", lambda url, timeout=10.0: "content")
+    monkeypatch.setattr("deepresearch.tools.search_web", mock_search)
+    monkeypatch.setattr("deepresearch.tools.fetch_content", lambda url, timeout=10.0: "content")
 
     llm = FakeChatModel(default_response='{"evidences": []}')
     node = make_research_node(llm)
@@ -145,8 +145,8 @@ def test_research_node_does_not_call_dedup(monkeypatch):
     def mock_fetch(url, timeout=10.0):
         return "content"
 
-    monkeypatch.setattr("deepresearch.nodes.research.search_web", mock_search)
-    monkeypatch.setattr("deepresearch.nodes.research.fetch_content", mock_fetch)
+    monkeypatch.setattr("deepresearch.tools.search_web", mock_search)
+    monkeypatch.setattr("deepresearch.tools.fetch_content", mock_fetch)
 
     dedup_called = []
     def mock_dedup(evidences, llm):
@@ -199,8 +199,8 @@ def test_research_node_calls_ranking(monkeypatch):
     def mock_fetch(url, timeout=10.0):
         return ""
 
-    monkeypatch.setattr("deepresearch.nodes.research.search_web", mock_search)
-    monkeypatch.setattr("deepresearch.nodes.research.fetch_content", mock_fetch)
+    monkeypatch.setattr("deepresearch.tools.search_web", mock_search)
+    monkeypatch.setattr("deepresearch.tools.fetch_content", mock_fetch)
 
     ranking_called = []
     def mock_ranking(sources):

@@ -16,6 +16,7 @@ from deepresearch.nodes import (
     make_final_node,
 )
 from deepresearch.llm import build_llm
+from deepresearch.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -98,9 +99,31 @@ def build_graph(llm: BaseChatModel | None = None) -> StateGraph:
 
     Args:
         llm: LLM 实例。为 None 时自动调用 build_llm()。
+             若 settings.otel_enabled=True，自动附加 OTelCallbackHandler。
     """
+    # ——— OTel 条件初始化 ———
+    otel_handler = None
+    _trace_node = None  # type: ignore[assignment]
+    if settings.otel_enabled:
+        try:
+            from deepresearch.observability.otel import setup_otel
+            from deepresearch.observability.otel_callback import (
+                OTelCallbackHandler,
+                _trace_node as _tn,
+            )
+            setup_otel()
+            otel_handler = OTelCallbackHandler()
+            _trace_node = _tn
+            logger.info("[graph] OTel tracing enabled")
+        except ImportError:
+            logger.warning("[graph] OTel packages not installed; tracing disabled")
+        except Exception:
+            logger.warning("[graph] OTel setup failed; tracing disabled", exc_info=True)
+
     if llm is None:
-        llm = build_llm()
+        llm = build_llm(callbacks=[otel_handler] if otel_handler else None)
+
+    wrap = _trace_node if _trace_node is not None else lambda name, fn: fn  # type: ignore[assignment]
 
     logger.info(
         "[graph] Building V2.1: plan → fan-out → research_agent(×N) → merge → human_review → summary → critique"
@@ -108,13 +131,13 @@ def build_graph(llm: BaseChatModel | None = None) -> StateGraph:
 
     graph = StateGraph(AgentState)
 
-    graph.add_node("plan", make_plan_node(llm))
-    graph.add_node("research_agent", make_research_agent(llm))
-    graph.add_node("merge", make_merge_node(llm))
-    graph.add_node("human_review", make_human_review_node(llm))
-    graph.add_node("summary", make_summary_node(llm))
-    graph.add_node("critique", make_critique_node(llm))
-    graph.add_node("final", make_final_node(llm))
+    graph.add_node("plan", wrap("plan", make_plan_node(llm)))
+    graph.add_node("research_agent", wrap("research_agent", make_research_agent(llm)))
+    graph.add_node("merge", wrap("merge", make_merge_node(llm)))
+    graph.add_node("human_review", wrap("human_review", make_human_review_node(llm)))
+    graph.add_node("summary", wrap("summary", make_summary_node(llm)))
+    graph.add_node("critique", wrap("critique", make_critique_node(llm)))
+    graph.add_node("final", wrap("final", make_final_node(llm)))
 
     graph.add_edge(START, "plan")
     graph.add_conditional_edges(

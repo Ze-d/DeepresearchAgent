@@ -57,6 +57,13 @@ class Settings(BaseSettings):
     # v2.1: Human-in-the-Loop
     human_review_enabled: bool = False
 
+    # OTel tracing (requires deepresearch-agent[otel])
+    otel_enabled: bool = False
+    otel_endpoint: str = "http://localhost:4318/v1/traces"
+    otel_service_name: str = "deepresearch-agent"
+    otel_console_export: bool = False
+    otel_file_export: str | None = None
+
     # LLM 调用参数
     temperature: float = 0.0
     max_retries: int = 2

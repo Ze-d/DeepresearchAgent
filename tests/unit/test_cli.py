@@ -19,10 +19,10 @@ def test_cli_run_mock(monkeypatch):
     from deepresearch.tools import SearchResult
 
     # Mock search
-    monkeypatch.setattr("deepresearch.nodes.research.search_web", lambda q, max_results: [SearchResult(title="T", url="https://x.com", snippet="S")])
-    monkeypatch.setattr("deepresearch.nodes.research.fetch_content", lambda url, timeout=10.0: "content")
+    monkeypatch.setattr("deepresearch.tools.search_web", lambda q, max_results=5, site_filter=None: [SearchResult(title="T", url="https://x.com", snippet="S")])
+    monkeypatch.setattr("deepresearch.tools.fetch_content", lambda url, timeout=10.0: "content")
     # Mock LLM
-    monkeypatch.setattr("deepresearch.graph.build_llm", lambda: FakeChatModel(default_response=PLAN_JSON))
+    monkeypatch.setattr("deepresearch.graph.build_llm", lambda callbacks=None: FakeChatModel(default_response=PLAN_JSON))
     # Disable checkpoint to avoid SQLite cross-thread issues with CliRunner
     monkeypatch.setattr("deepresearch.checkpoint.manager.settings.checkpoint_enabled", False)
 
@@ -33,9 +33,9 @@ def test_cli_run_mock(monkeypatch):
 
 def test_cli_run_with_iterations(monkeypatch):
     from deepresearch.tools import SearchResult
-    monkeypatch.setattr("deepresearch.nodes.research.search_web", lambda q, max_results: [SearchResult(title="T", url="https://x.com", snippet="S")])
-    monkeypatch.setattr("deepresearch.nodes.research.fetch_content", lambda url, timeout=10.0: "content")
-    monkeypatch.setattr("deepresearch.graph.build_llm", lambda: FakeChatModel(default_response=PLAN_JSON))
+    monkeypatch.setattr("deepresearch.tools.search_web", lambda q, max_results=5, site_filter=None: [SearchResult(title="T", url="https://x.com", snippet="S")])
+    monkeypatch.setattr("deepresearch.tools.fetch_content", lambda url, timeout=10.0: "content")
+    monkeypatch.setattr("deepresearch.graph.build_llm", lambda callbacks=None: FakeChatModel(default_response=PLAN_JSON))
     monkeypatch.setattr("deepresearch.checkpoint.manager.settings.checkpoint_enabled", False)
 
     result = runner.invoke(app, ["run", "测试问题", "--max-iterations", "1"])
@@ -77,14 +77,14 @@ def test_run_workflow_returns_state(monkeypatch, tmp_path):
     import json
 
     # Mock search
-    def mock_search(query, max_results):
+    def mock_search(query, max_results=5, site_filter=None):
         return [SearchResult(title="T", url="https://example.com", snippet="S")]
 
     def mock_fetch(url, timeout=8.0):
         return "Test content for evidence extraction."
 
-    monkeypatch.setattr("deepresearch.nodes.research.search_web", mock_search)
-    monkeypatch.setattr("deepresearch.nodes.research.fetch_content", mock_fetch)
+    monkeypatch.setattr("deepresearch.tools.search_web", mock_search)
+    monkeypatch.setattr("deepresearch.tools.fetch_content", mock_fetch)
 
     # Disable checkpoint to avoid SQLite issues
     monkeypatch.setattr("deepresearch.checkpoint.manager.settings.checkpoint_enabled", False)
@@ -103,7 +103,7 @@ def test_run_workflow_returns_state(monkeypatch, tmp_path):
     llm = FakeChatModel(default_response=PLAN)
 
     # Inject mock LLM into graph
-    monkeypatch.setattr("deepresearch.graph.build_llm", lambda: llm)
+    monkeypatch.setattr("deepresearch.graph.build_llm", lambda callbacks=None: llm)
 
     result = run_workflow("test query", max_iterations=1)
     assert result["user_query"] == "test query"

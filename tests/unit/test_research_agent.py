@@ -37,8 +37,8 @@ class TestResearchAgentNode:
         def mock_fetch(url, timeout=8.0):
             return "Test content."
 
-        monkeypatch.setattr("deepresearch.nodes.research_agent.search_web", mock_search)
-        monkeypatch.setattr("deepresearch.nodes.research_agent.fetch_content", mock_fetch)
+        monkeypatch.setattr("deepresearch.tools.search_web", mock_search)
+        monkeypatch.setattr("deepresearch.tools.fetch_content", mock_fetch)
 
         evidence_json = '{"evidences": [{"claim": "test", "quote": "q", "confidence": 0.9}]}'
         llm = FakeChatModel(default_response=evidence_json)
@@ -87,8 +87,8 @@ class TestResearchAgentNode:
             searched_calls.append({"query": query, "site_filter": site_filter})
             return []
 
-        monkeypatch.setattr("deepresearch.nodes.research_agent.search_web", mock_search)
-        monkeypatch.setattr("deepresearch.nodes.research_agent.fetch_content",
+        monkeypatch.setattr("deepresearch.tools.search_web", mock_search)
+        monkeypatch.setattr("deepresearch.tools.fetch_content",
                            lambda url, timeout=8.0: "")
 
         llm = FakeChatModel(default_response='{"evidences": []}')
