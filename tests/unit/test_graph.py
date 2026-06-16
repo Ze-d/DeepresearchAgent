@@ -17,7 +17,7 @@ def test_graph_nodes_registered():
     llm = FakeChatModel(default_response=PLAN_JSON)
     graph = build_graph(llm=llm)
     node_names = set(graph.nodes.keys())
-    assert node_names == {"plan", "research", "summary", "critique", "final"}
+    assert node_names == {"plan", "research_agent", "merge", "human_review", "summary", "critique", "final"}
 
 
 def test_graph_run_mock_full_flow():
@@ -28,9 +28,9 @@ def test_graph_run_mock_full_flow():
     app = graph.compile()
 
     # Need to mock search to avoid real network calls
-    import deepresearch.nodes.research as research_mod
-    research_mod.search_web = lambda q, max_results: [SearchResult(title="T", url="https://x.com", snippet="S")]
-    research_mod.fetch_content = lambda url, timeout=10.0: "content"
+    import deepresearch.nodes.research_agent as ra_mod
+    ra_mod.search_web = lambda q, max_results=5, **kw: [SearchResult(title="T", url="https://x.com", snippet="S")]
+    ra_mod.fetch_content = lambda url, **kw: "content"
 
     initial_state: AgentState = {
         "user_query": "测试问题",
@@ -45,6 +45,14 @@ def test_graph_run_mock_full_flow():
         "max_iterations": 2,
         "status": "initialized",
         "errors": [],
+        "citations": [],
+        "iteration_metrics": [],
+        "checkpoint_ref": None,
+        "agent_outputs": [],
+        "merge_summary": None,
+        "human_review": None,
+        "agent_profile": None,
+        "sub_question": None,
     }
 
     result = app.invoke(initial_state)
@@ -71,6 +79,14 @@ def test_graph_stops_when_planning_fails():
         "max_iterations": 2,
         "status": "initialized",
         "errors": [],
+        "citations": [],
+        "iteration_metrics": [],
+        "checkpoint_ref": None,
+        "agent_outputs": [],
+        "merge_summary": None,
+        "human_review": None,
+        "agent_profile": None,
+        "sub_question": None,
     }
 
     result = app.invoke(initial_state)
@@ -88,6 +104,43 @@ def test_graph_routes_to_end_when_plan_errors():
         "max_iterations": 2, "status": "error", "errors": ["bad plan"],
     }
     assert route_after_plan(state_error) == "end"
+
+
+def test_build_graph_has_v2_1_nodes():
+    """v2.1 graph 包含 research_agent 和 merge，不含 research"""
+    from deepresearch.graph import build_graph
+    from tests.fixtures.mock_llm import FakeChatModel
+    llm = FakeChatModel()
+    graph = build_graph(llm=llm)
+    node_names = list(graph.nodes.keys())
+    assert "research_agent" in node_names
+    assert "merge" in node_names
+    assert "research" not in node_names
+
+
+def test_fanout_creates_sends():
+    """fanout_to_agents 根据 source_types 创建 Send"""
+    from deepresearch.graph import fanout_to_agents
+    from langgraph.types import Send
+    state: AgentState = {
+        "user_query": "test", "research_plan": {
+            "research_goal": "test",
+            "sub_questions": [
+                {"id": "q1", "question": "q", "priority": 1,
+                 "search_queries": ["q"], "source_types": ["paper", "blog"]},
+            ],
+            "expected_sections": [], "success_criteria": [],
+        },
+        "search_results": [], "sources": [], "evidences": [],
+        "draft_summary": None, "critique_result": None, "final_report": None,
+        "iteration": 0, "max_iterations": 2, "status": "planned", "errors": [],
+        "citations": [], "iteration_metrics": [], "checkpoint_ref": None,
+        "agent_outputs": [], "merge_summary": None, "human_review": None,
+        "agent_profile": None, "sub_question": None,
+    }
+    sends = fanout_to_agents(state)
+    assert len(sends) == 2, f"Expected 2 Sends (paper+blog), got {len(sends)}"
+    assert all(isinstance(s, Send) for s in sends)
 
 
 # Keep the route tests (they don't need llm)
@@ -110,7 +163,7 @@ def test_graph_conditional_route_to_research_when_critique_fails():
         "final_report": None, "iteration": 0, "max_iterations": 2,
         "status": "running", "errors": [],
     }
-    assert route_after_critique(state_fail) == "research"
+    assert route_after_critique(state_fail) == "research_agent"
 
 
 def test_graph_conditional_route_exceeds_max_iterations():

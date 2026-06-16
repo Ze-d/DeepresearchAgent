@@ -41,7 +41,17 @@ class TestSubQuestion:
             "question": "test",
             "priority": 2,
             "search_queries": ["query1"],
+            "source_types": ["blog"],
         }
+
+    def test_source_types_default_and_custom(self):
+        """SubQuestion 支持 source_types 字段，默认值为 ["blog"]"""
+        sq = SubQuestion(id="q1", question="test", priority=1, search_queries=["q"])
+        assert sq.source_types == ["blog"]
+
+        sq2 = SubQuestion(id="q2", question="test", priority=2,
+                          search_queries=["q"], source_types=["paper", "github"])
+        assert sq2.source_types == ["paper", "github"]
 
 
 class TestResearchPlan:
@@ -349,6 +359,32 @@ class TestAgentStateV1:
         assert state["iteration_metrics"] == []
         assert state["checkpoint_ref"] is None
 
+    def test_initial_state_with_v2_1_fields(self):
+        """AgentState 包含 v2.1 新增字段 agent_outputs, merge_summary, human_review"""
+        state: AgentState = {
+            "user_query": "test",
+            "research_plan": None,
+            "search_results": [],
+            "sources": [],
+            "evidences": [],
+            "draft_summary": None,
+            "critique_result": None,
+            "final_report": None,
+            "iteration": 0,
+            "max_iterations": 2,
+            "status": "initialized",
+            "errors": [],
+            "citations": [],
+            "iteration_metrics": [],
+            "checkpoint_ref": None,
+            "agent_outputs": [],
+            "merge_summary": None,
+            "human_review": None,
+        }
+        assert state["agent_outputs"] == []
+        assert state["merge_summary"] is None
+        assert state["human_review"] is None
+
 
 class TestAgentState:
     def test_initial_state(self):
@@ -392,3 +428,34 @@ class TestAgentState:
         state["iteration"] = 1
         assert state["research_plan"] is not None
         assert state["iteration"] == 1
+
+
+class TestMergeSummary:
+    def test_create_default(self):
+        """MergeSummary 默认值正确"""
+        from deepresearch.state import MergeSummary
+        ms = MergeSummary()
+        assert ms.total_sources == 0
+        assert ms.total_evidences == 0
+        assert ms.cross_validated_count == 0
+        assert ms.unique_findings_per_agent == {}
+        assert ms.conflicts == []
+        assert ms.source_bias_warnings == []
+        assert ms.coverage_gaps == []
+
+    def test_create_full(self):
+        """MergeSummary 完整字段创建正确"""
+        from deepresearch.state import MergeSummary
+        ms = MergeSummary(
+            total_sources=10,
+            total_evidences=25,
+            cross_validated_count=8,
+            unique_findings_per_agent={"paper": 4, "blog": 6},
+            conflicts=[{"topic": "test", "severity": "minor", "positions": {}}],
+            source_bias_warnings=["5/25 条证据仅来自单一来源"],
+            coverage_gaps=[],
+        )
+        assert ms.total_sources == 10
+        assert ms.cross_validated_count == 8
+        assert len(ms.conflicts) == 1
+        assert ms.unique_findings_per_agent["paper"] == 4

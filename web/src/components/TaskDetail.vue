@@ -14,6 +14,12 @@
     <PlanCard :plan="taskState.research_plan" />
     <SourcesTable :sources="taskState.sources || []" />
     <EvidenceList :evidences="taskState.evidences || []" />
+    <ReviewPanel
+      v-if="reviewData"
+      :reviewData="reviewData"
+      :taskId="id"
+      @decision="onReviewSubmitted"
+    />
     <CritiqueDashboard :critique="taskState.critique_result" :metrics="taskState.iteration_metrics" />
     <FinalReport v-if="taskState.final_report" :report="taskState.final_report" />
 
@@ -30,6 +36,7 @@ import SourcesTable from './SourcesTable.vue'
 import EvidenceList from './EvidenceList.vue'
 import CritiqueDashboard from './CritiqueDashboard.vue'
 import FinalReport from './FinalReport.vue'
+import ReviewPanel from './ReviewPanel.vue'
 
 const props = defineProps({ id: String })
 
@@ -38,6 +45,7 @@ const taskState = reactive({})
 const taskStatus = ref('loading')
 const completedNodes = ref([])
 const currentNode = ref(null)
+const reviewData = ref(null)
 const error = ref('')
 let eventSource = null
 
@@ -78,6 +86,16 @@ function handleDone(_data) {
   taskStatus.value = 'completed'
 }
 
+function handleReviewRequired(data) {
+  reviewData.value = data
+  taskStatus.value = 'review_required'
+}
+
+function onReviewSubmitted(decision) {
+  reviewData.value = null
+  taskStatus.value = 'running'
+}
+
 function handleError(_e) {
   error.value = '执行出错'
   taskStatus.value = 'failed'
@@ -99,6 +117,7 @@ onMounted(async () => {
         onTaskStarted: () => { taskStatus.value = 'running' },
         onNodeStart: handleNodeStart,
         onNodeDone: handleNodeDone,
+        onReviewRequired: handleReviewRequired,
         onDone: handleDone,
         onError: handleError,
       })

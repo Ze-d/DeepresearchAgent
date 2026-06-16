@@ -5,6 +5,13 @@ import httpx
 from deepresearch.tools import search_web, fetch_content, SearchResult
 
 
+def test_search_web_accepts_site_filter():
+    import inspect
+    sig = inspect.signature(search_web)
+    assert "site_filter" in sig.parameters
+    assert sig.parameters["site_filter"].default is None
+
+
 class TestSearchWeb:
     def test_returns_list(self, monkeypatch):
         """搜索返回 SearchResult 列表"""

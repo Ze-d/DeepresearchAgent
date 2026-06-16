@@ -1,5 +1,6 @@
 # deepresearch/nodes/summary.py
 import logging
+import time
 
 from langchain_core.language_models import BaseChatModel
 
@@ -13,10 +14,12 @@ def make_summary_node(llm: BaseChatModel):
     """创建 summary_node（闭包注入 LLM）。"""
 
     def summary_node(state: AgentState) -> dict:
-        logger.info("Summary node: generating draft summary")
+        t0 = time.perf_counter()
+        evidences = state.get("evidences", [])
+        logger.info("[summary] 开始: %d evidences", len(evidences))
+        print("\n📝 Summary: 正在生成报告摘要...")
 
         plan = state.get("research_plan") or {}
-        evidences = state.get("evidences", [])
 
         messages = build_summarizer_messages(
             user_query=state["user_query"],
@@ -26,6 +29,10 @@ def make_summary_node(llm: BaseChatModel):
 
         response = llm.invoke(messages)
         draft = str(response.content) if hasattr(response, "content") else str(response)
+
+        elapsed = time.perf_counter() - t0
+        logger.info("[summary] 完成: %d 字符 (%.1fs)", len(draft), elapsed)
+        print(f"📝 Summary: 完成 → {len(draft)} 字符 ({elapsed:.1f}s)")
 
         return {
             "draft_summary": draft,

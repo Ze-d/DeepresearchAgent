@@ -136,8 +136,8 @@ def test_research_node_uses_critique_follow_up_queries(monkeypatch):
     assert searched_queries == ["targeted follow-up"]
 
 
-def test_research_node_calls_dedup(monkeypatch):
-    """research_node 执行后调用 dedup"""
+def test_research_node_does_not_call_dedup(monkeypatch):
+    """v2.1: research_node 不再调用 dedup — dedup 已移至 merge 节点统一处理"""
     def mock_search(query, max_results):
         from deepresearch.tools import SearchResult
         return [SearchResult(title="T", url="https://x.com", snippet="S")]
@@ -188,7 +188,7 @@ def test_research_node_calls_dedup(monkeypatch):
     }
 
     node(state)
-    assert len(dedup_called) > 0
+    assert len(dedup_called) == 0, "v2.1: research_node should NOT call dedup — merge handles it"
 
 
 def test_research_node_calls_ranking(monkeypatch):

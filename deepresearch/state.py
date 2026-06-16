@@ -1,5 +1,6 @@
 # deepresearch/state.py
-from typing import TypedDict, Any
+import operator
+from typing import Annotated, TypedDict, Any
 
 from pydantic import BaseModel, Field
 
@@ -12,6 +13,7 @@ class SubQuestion(BaseModel):
     question: str
     priority: int
     search_queries: list[str]
+    source_types: list[str] = ["blog"]  # v2.1 新增
 
 
 class ResearchPlan(BaseModel):
@@ -32,6 +34,7 @@ class Source(BaseModel):
     content: str | None = None
     source_type: str = "unknown"
     score: float = 0.0
+    source_agent: str = "unknown"  # v2.1: which agent found this source
 
 
 class Evidence(BaseModel):
@@ -40,6 +43,7 @@ class Evidence(BaseModel):
     claim: str
     quote: str | None = None
     confidence: float = 0.0
+    source_agent: str = "unknown"  # v2.1: which agent found this evidence
 
 
 # ——— Critique ———
@@ -120,15 +124,31 @@ class FinalReport(BaseModel):
     limitations: list[str]
 
 
+# ——— v2.1: Merge 质量报告 ———
+
+
+class MergeSummary(BaseModel):
+    """v2.1: Merge 节点的质量报告，汇总并行 Agent 产出的交叉验证结果。"""
+    total_sources: int = 0
+    total_evidences: int = 0
+    cross_validated_count: int = 0
+    unique_findings_per_agent: dict[str, int] = {}
+    conflicts: list[dict[str, Any]] = []
+    source_bias_warnings: list[str] = []
+    coverage_gaps: list[str] = []
+
+
 # ——— AgentState (LangGraph TypedDict) ———
 
 
 class AgentState(TypedDict):
     user_query: str
     research_plan: dict[str, Any] | None
-    search_results: list[dict[str, Any]]
-    sources: list[dict[str, Any]]
-    evidences: list[dict[str, Any]]
+    # 以下三个字段使用 operator.add reducer，支持多个并行 research_agent
+    # 在同一 superstep 中并发写入（Send API fan-out）
+    search_results: Annotated[list[dict[str, Any]], operator.add]
+    sources: Annotated[list[dict[str, Any]], operator.add]
+    evidences: Annotated[list[dict[str, Any]], operator.add]
     draft_summary: str | None
     critique_result: dict[str, Any] | None
     final_report: str | None
@@ -140,3 +160,9 @@ class AgentState(TypedDict):
     citations: list[dict[str, Any]]
     iteration_metrics: list[dict[str, Any]]
     checkpoint_ref: str | None
+    # v2.1 新增
+    agent_outputs: list[dict[str, Any]]   # 每个 Agent 的中间产出
+    merge_summary: dict[str, Any] | None  # MergeSummary dict
+    human_review: dict[str, Any] | None   # 人工审核结果
+    agent_profile: str | None             # research_agent 的 profile key（Send API 注入）
+    sub_question: dict[str, Any] | None   # 单个 sub_question（Send API 注入）

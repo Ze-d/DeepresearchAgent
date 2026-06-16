@@ -38,6 +38,9 @@ def _make_initial_state(query: str, max_iterations: int) -> AgentState:
         "citations": [],
         "iteration_metrics": [],
         "checkpoint_ref": None,
+        "agent_outputs": [],
+        "merge_summary": None,
+        "human_review": None,
     }
 
 
@@ -280,25 +283,31 @@ def checkpoints(
 @app.command()
 def serve(
     host: str = typer.Option("127.0.0.1", "--host", "-h", help="服务器绑定的 IP"),
-    port: int = typer.Option(8000, "--port", "-p", help="服务器端口"),
+    port: int = typer.Option(8620, "--port", "-p", help="服务器端口"),
     reload: bool = typer.Option(False, "--reload", help="启用热重载（开发模式）"),
 ):
     """启动 Web 服务器（FastAPI + Vue 前端）。"""
+    import sys
     import uvicorn
+
+    # 确保 server 包可被导入（项目根目录可能不在已安装的 package 路径中）
+    _project_root = str(Path(__file__).resolve().parent.parent)
+    if _project_root not in sys.path:
+        sys.path.insert(0, _project_root)
 
     # 覆盖配置
     import deepresearch.config as config_module
     config_module.settings.server_host = host
     config_module.settings.server_port = port
 
-    typer.echo(f"🚀 DeepResearch Agent Web Server")
+    typer.echo("🚀 DeepResearch Agent Web Server")
     typer.echo(f"   地址: http://{host}:{port}")
     typer.echo(f"   API 文档: http://{host}:{port}/docs")
 
     web_dist = Path(__file__).resolve().parent.parent / "web" / "dist"
     if not web_dist.exists():
-        typer.echo(f"   ⚠️  前端未构建（web/dist/ 不存在）")
-        typer.echo(f"   请先运行: cd web && npm install && npm run build")
+        typer.echo("   ⚠️  前端未构建（web/dist/ 不存在）")
+        typer.echo("   请先运行: cd web && npm install && npm run build")
 
     uvicorn.run(
         "server:app",

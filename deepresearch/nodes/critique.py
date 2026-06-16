@@ -28,7 +28,8 @@ def make_critique_node(llm: BaseChatModel):
     def critique_node(state: AgentState) -> dict:
         iteration = state.get("iteration", 0)
         new_iteration = iteration + 1
-        logger.info("Critique node: iteration %d → %d", iteration, new_iteration)
+        logger.info("[critique] 开始: iteration %d→%d", iteration, new_iteration)
+        print(f"\n🔍 Critique: 正在评审报告 (iteration {new_iteration})...")
 
         prev_metrics = state.get("iteration_metrics", [])
         prev_issues_count = prev_metrics[-1].get("issues_count") if prev_metrics else None
@@ -46,7 +47,7 @@ def make_critique_node(llm: BaseChatModel):
             response = llm.invoke(messages)
             raw = str(response.content) if hasattr(response, "content") else str(response)
         except Exception:
-            logger.exception("Critique LLM call failed")
+            logger.exception("[critique] LLM call failed")
             return {
                 "critique_result": {"pass": True, "overall_score": 0.5,
                                     "dimensions": {}, "issues": [], "new_search_queries": []},
@@ -95,8 +96,11 @@ def make_critique_node(llm: BaseChatModel):
             "latency_ms": latency_ms,
         }
 
-        logger.info("Critique: score=%.2f pass=%s fix_rate=%s",
-                    critique["overall_score"], critique["pass"], fix_rate)
+        logger.info(
+            "[critique] 完成: score=%.2f pass=%s fix_rate=%s (%.0fms)",
+            critique["overall_score"], critique["pass"], fix_rate, latency_ms,
+        )
+        print(f"🔍 Critique: 完成 → score={critique['overall_score']:.2f}, pass={critique['pass']}, fix_rate={fix_rate}")
 
         return {
             "critique_result": critique,

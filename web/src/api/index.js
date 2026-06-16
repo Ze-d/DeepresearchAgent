@@ -42,6 +42,10 @@ export function subscribeToTask(taskId, callbacks) {
     if (callbacks.onNodeDone) callbacks.onNodeDone(JSON.parse(e.data))
   })
 
+  source.addEventListener('review_required', (e) => {
+    if (callbacks.onReviewRequired) callbacks.onReviewRequired(JSON.parse(e.data))
+  })
+
   source.addEventListener('done', (e) => {
     if (callbacks.onDone) callbacks.onDone(JSON.parse(e.data))
     source.close()

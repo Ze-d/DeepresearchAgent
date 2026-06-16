@@ -25,9 +25,9 @@
 - Observability（LangChain Callback + Token/延迟/错误统计）
 - CLI 增强（resume / checkpoints 命令、--stream 选项）
 
-## v2：Web 应用化
+## v2：Web 应用化 ✅
 
-**状态:** 设计中
+**状态:** 已完成
 
 - FastAPI 后端（任务 CRUD API）
 - SSE 事件流（node 级别进度推送）
@@ -40,16 +40,25 @@
 - CLI `serve` 命令（一键启动）
 - CLI 与 API 共享 `build_graph()` 核心代码
 
-## v2.1：多 Agent 并发研究
+## v2.1：多 Agent 并发研究 ✅
 
-**状态:** 规划中
+**状态:** 已完成
 
-- Paper Research Agent（arXiv / 学术来源）
-- GitHub Research Agent（代码仓库）
-- Blog Research Agent（技术博客）
-- Official Docs Agent（官方文档）
-- 多来源并发研究 + 结果合并
-- 人工审核节点（human-in-the-loop）
+- LangGraph Send API 并行扇出架构
+- AgentProfile 策略注入（统一节点 + 4 个 profile）
+  - Paper Research Agent（arXiv / 学术来源）
+  - GitHub Research Agent（代码仓库）
+  - Blog Research Agent（技术博客）
+  - Official Docs Agent（官方文档）
+- Plan 节点 LLM 自动分类 sub_question → source_type
+- Merge 节点三阶段流水线（收集 → 交叉验证去重 → 质量报告）
+- 跨 Agent 证据交叉验证 + 矛盾检测（Phase 2）
+- Human-in-the-Loop 审核节点（LangGraph interrupt，Phase 3）
+  - POST /api/tasks/{id}/review endpoint
+  - ReviewPanel.vue 前端审核面板
+  - 三种决策：批准 / 补充搜索 / 重做
+- tools.py search_web() site_filter 增强
+- 239 tests, ruff 零警告
 
 ## v3：本地知识库 + MCP 集成
 

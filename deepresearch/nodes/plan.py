@@ -2,6 +2,7 @@
 import json
 import logging
 import re
+import time
 
 from langchain_core.language_models import BaseChatModel
 from pydantic import ValidationError
@@ -40,10 +41,18 @@ def _parse_plan_json(raw: str) -> dict | None:
         return None
 
     try:
-        return ResearchPlan.model_validate(data).model_dump()
+        plan = ResearchPlan.model_validate(data).model_dump()
     except ValidationError as exc:
         logger.warning("Plan JSON failed schema validation: %s", exc)
         return None
+
+    # Ensure every sub_question has source_types with valid fallback
+    valid_types = {"paper", "github", "blog", "docs"}
+    for sq in plan.get("sub_questions", []):
+        if "source_types" not in sq:
+            sq["source_types"] = ["blog"]
+        sq["source_types"] = [t for t in sq["source_types"] if t in valid_types] or ["blog"]
+    return plan
 
 
 def _run_planner(user_query: str, llm: BaseChatModel, max_retries: int = 2) -> dict | None:
@@ -68,15 +77,24 @@ def make_plan_node(llm: BaseChatModel):
 
     def plan_node(state: AgentState) -> dict:
         user_query = state["user_query"]
-        logger.info("Plan node: generating research plan for: %s", user_query)
+        t0 = time.perf_counter()
+        logger.info("[plan] 开始: %s", user_query[:80])
+        print("\n📋 Plan: 正在生成研究计划...")
 
         plan = _run_planner(user_query, llm)
 
         if plan is None:
+            elapsed = time.perf_counter() - t0
+            logger.error("[plan] 失败 (%.1fs)", elapsed)
             return {
                 "status": "error",
                 "errors": ["Plan generation failed: unable to parse LLM output as valid JSON."],
             }
+
+        elapsed = time.perf_counter() - t0
+        sq_count = len(plan.get("sub_questions", []))
+        logger.info("[plan] 完成: %d 个子问题 (%.1fs)", sq_count, elapsed)
+        print(f"📋 Plan: 完成 → {sq_count} 个子问题, {plan.get('expected_sections', [])}")
 
         return {
             "research_plan": plan,

@@ -37,7 +37,7 @@ class Settings(BaseSettings):
 
     # v1: Evidence 质量
     dedup_enabled: bool = True
-    dedup_max_calls_per_run: int = 20
+    dedup_max_calls_per_run: int = 15  # 每组 1 次批量 LLM 调用，此值为最大处理组数
     source_ranking_enabled: bool = True
 
     # v1: Checkpoint
@@ -51,12 +51,16 @@ class Settings(BaseSettings):
 
     # v2: Server
     server_host: str = "127.0.0.1"
-    server_port: int = 8000
+    server_port: int = 8620
     cors_origins: list[str] = ["http://localhost:5173"]
+
+    # v2.1: Human-in-the-Loop
+    human_review_enabled: bool = False
 
     # LLM 调用参数
     temperature: float = 0.0
     max_retries: int = 2
+    llm_request_timeout: int = 120  # 单次 LLM API 请求超时秒数
 
 
 # 全局单例
