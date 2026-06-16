@@ -13,7 +13,7 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import SystemMessage
 
 from deepresearch.state import AgentState
-from deepresearch.tools import search_web, fetch_content
+from deepresearch import tools as _tools
 
 logger = logging.getLogger(__name__)
 
@@ -161,7 +161,7 @@ def make_research_agent(llm: BaseChatModel):
             # DuckDuckGo 仅支持单个 site: 操作符
             site_filter = profile.search_modifiers[0] if profile.search_modifiers else None
 
-            results = search_web(query, max_results=5, site_filter=site_filter if site_filter else None)
+            results = _tools.search_web(query, max_results=5, site_filter=site_filter if site_filter else None)
             print(f"   🔎 [{profile.name}] 搜索: {query}{' site:' + site_filter if site_filter else ''} → {len(results)} 条")
             for r in results:
                 source_id = str(uuid.uuid4())[:8]
@@ -176,7 +176,7 @@ def make_research_agent(llm: BaseChatModel):
                     "source_agent": profile_key,
                 }
 
-                content = fetch_content(r.url)
+                content = _tools.fetch_content(r.url)
                 if content:
                     source_dict["content"] = content
                     evidences = _extract_evidences(

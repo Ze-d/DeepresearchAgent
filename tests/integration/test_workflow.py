@@ -94,11 +94,11 @@ def _mock_search(monkeypatch):
     from deepresearch.tools import SearchResult
 
     monkeypatch.setattr(
-        "deepresearch.nodes.research_agent.search_web",
+        "deepresearch.tools.search_web",
         lambda query, max_results=5, site_filter=None: [SearchResult(title="T", url="https://x.com", snippet="S")],
     )
     monkeypatch.setattr(
-        "deepresearch.nodes.research_agent.fetch_content",
+        "deepresearch.tools.fetch_content",
         lambda url, timeout=8.0: "content",
     )
 

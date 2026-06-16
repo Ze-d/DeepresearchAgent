@@ -8,7 +8,7 @@ from typing import Any
 from langchain_core.language_models import BaseChatModel
 
 from deepresearch.state import AgentState
-from deepresearch.tools import search_web, fetch_content
+from deepresearch import tools as _tools
 from deepresearch.prompts import build_researcher_messages
 from deepresearch.config import Settings
 
@@ -86,7 +86,7 @@ def make_research_node(llm: BaseChatModel):
                 if search_count >= max_total_searches:
                     break
                 _get_console().print(f"   🔎 搜索 ({search_count + 1}/{max_total_searches}): {query}")
-                results = search_web(query, max_results=cfg.max_search_results)
+                results = _tools.search_web(query, max_results=cfg.max_search_results)
                 search_count += 1
                 _get_console().print(f"       找到 {len(results)} 条结果")
                 for idx_r, r in enumerate(results):
@@ -101,7 +101,7 @@ def make_research_node(llm: BaseChatModel):
                         "score": 0.5,
                     }
                     _get_console().print(f"       📄 抓取 ({idx_r + 1}/{len(results)}): {r.url[:80]}...")
-                    content = fetch_content(r.url)
+                    content = _tools.fetch_content(r.url)
                     if content:
                         _get_console().print(f"       📝 抽取证据 ({len(content)} 字符)...")
                         source_dict["content"] = content
