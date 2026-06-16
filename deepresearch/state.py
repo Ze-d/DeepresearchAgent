@@ -1,5 +1,6 @@
 # deepresearch/state.py
-from typing import TypedDict, Any
+import operator
+from typing import Annotated, TypedDict, Any
 
 from pydantic import BaseModel, Field
 
@@ -143,9 +144,11 @@ class MergeSummary(BaseModel):
 class AgentState(TypedDict):
     user_query: str
     research_plan: dict[str, Any] | None
-    search_results: list[dict[str, Any]]
-    sources: list[dict[str, Any]]
-    evidences: list[dict[str, Any]]
+    # 以下三个字段使用 operator.add reducer，支持多个并行 research_agent
+    # 在同一 superstep 中并发写入（Send API fan-out）
+    search_results: Annotated[list[dict[str, Any]], operator.add]
+    sources: Annotated[list[dict[str, Any]], operator.add]
+    evidences: Annotated[list[dict[str, Any]], operator.add]
     draft_summary: str | None
     critique_result: dict[str, Any] | None
     final_report: str | None

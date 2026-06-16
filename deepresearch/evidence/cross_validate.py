@@ -1,173 +1,268 @@
 """交叉验证与冲突检测模块。
 
 提供两个函数：
-- cross_validate_evidences: 跨 Agent 交叉验证，聚类相似 claim 并提升 confidence
-- detect_conflicts: 检测同一 cluster 内不同 Agent 的矛盾
+- cross_validate_evidences: 跨 Agent 批量语义聚类，提升多源确认的 confidence
+- detect_conflicts: 批量检测同一 cluster 内不同 Agent 的矛盾
 """
+
 import json
 import logging
+import re
+import time
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import SystemMessage
 
 logger = logging.getLogger(__name__)
 
-_CROSS_VALIDATE_PROMPT = """你是一个事实交叉验证助手。判断以下两条 evidence 是否表达相同的核心信息。
+_BATCH_CLUSTER_PROMPT = """你是一个交叉验证助手。请将以下证据按语义聚类——表达相同核心信息的归入同一组。
 
-Evidence A:
-claim: "{claim_a}"
-quote: "{quote_a}"
+证据列表（JSON）：
+{evidences_json}
 
-Evidence B:
-claim: "{claim_b}"
-quote: "{quote_b}"
+要求：
+1. 只比较 claim 字段的核心语义，忽略措辞差异。
+2. 每个 cluster 包含表达相同信息的证据 ID 列表。
+3. 不与任何其他证据相同的证据不需要单独列出。
+4. 严格返回 JSON，no extra text。
 
-只回答 YES 或 NO。如果两条 evidence 的核心信息一致（即使措辞不同），回答 YES。"""
+返回格式：
+{{"clusters": [["id1", "id3"], ["id2", "id5"], ...]}}"""
 
-_CONFLICT_DETECT_PROMPT = """你是一个矛盾检测助手。以下是一组来自不同来源的 evidence，判断它们之间是否存在矛盾。
+_BATCH_CONFLICT_PROMPT = """你是一个矛盾检测助手。以下是按语义聚类分组的多条证据——每组内的证据来自不同来源，声称相同事实。
 
-Claims:
-{claims_text}
+请检测每组内是否存在矛盾。
 
-请分析这些 claim 之间是否存在矛盾。只返回 JSON 格式：
-{{"conflict": true/false, "severity": "major"/"minor"/"none"}}
+聚类列表（JSON）：
+{clusters_json}
 
-- conflict: 是否存在矛盾
-- severity: major（根本性矛盾）, minor（轻微不一致）, none（无矛盾）"""
+返回格式：
+{{"conflicts": [{{"cluster_index": 0, "severity": "major"}}, ...]}}
 
+- cluster_index: 出现矛盾的组序号（从0开始）
+- severity: major（根本矛盾）或 minor（轻微不一致）
+- 没有矛盾的组不需要列出"""
+
+_MAX_EVIDENCES = 50
 _MAX_CONFIDENCE_BOOST = 0.2
 _BOOST_PER_AGENT = 0.05
 _MAX_CONFIDENCE = 1.0
 
+# Rich console for progress output
+_console = None
 
-def _are_same_claim(ev_a: dict, ev_b: dict, llm: BaseChatModel) -> bool:
-    """用 LLM 判断两条 evidence 是否表达相同的核心信息。"""
-    prompt = _CROSS_VALIDATE_PROMPT.format(
-        claim_a=ev_a.get("claim", ""),
-        quote_a=ev_a.get("quote", ""),
-        claim_b=ev_b.get("claim", ""),
-        quote_b=ev_b.get("quote", ""),
+
+def _get_console():
+    global _console
+    if _console is None:
+        from rich.console import Console
+        _console = Console()
+    return _console
+
+
+def _batch_cluster(evidences: list[dict], llm: BaseChatModel) -> list[list[str]]:
+    """用一次批量 LLM 调用将所有 evidence 聚类。"""
+    ev_list = []
+    for i, ev in enumerate(evidences):
+        ev_list.append({
+            "index": i,
+            "id": ev.get("id", ""),
+            "agent": ev.get("source_agent", "unknown"),
+            "claim": ev.get("claim", "")[:300],
+        })
+
+    prompt = _BATCH_CLUSTER_PROMPT.format(
+        evidences_json=json.dumps(ev_list, ensure_ascii=False)
     )
+
     try:
         response = llm.invoke([SystemMessage(content=prompt)])
-        text = str(response.content).strip().upper() if hasattr(response, "content") else ""
-        return "YES" in text
+        text = str(response.content) if hasattr(response, "content") else str(response)
+
+        # 提取 JSON
+        match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", text, re.DOTALL)
+        if match:
+            text = match.group(1).strip()
+
+        data = json.loads(text)
+        raw_clusters: list[list[str]] = data.get("clusters", [])
     except Exception:
-        logger.warning("Cross-validate LLM call failed, treating as different claims", exc_info=True)
-        return False
+        logger.warning("Batch clustering LLM call failed", exc_info=True)
+        # Fallback: 每条 evidence 独立成簇
+        return [[ev["id"]] for ev in evidences]
 
+    # 验证并重建 clusters（确保所有 ID 都存在）
+    valid_ids = {ev["id"] for ev in evidences}
+    clusters: list[list[str]] = []
+    seen_in_clusters: set[str] = set()
+    for cluster_ids in raw_clusters:
+        clean = [cid for cid in cluster_ids if cid in valid_ids]
+        if len(clean) >= 2:
+            clusters.append(clean)
+            seen_in_clusters.update(clean)
 
-def _cluster_evidences(evidences: list[dict], llm: BaseChatModel) -> list[list[dict]]:
-    """将语义相同的 evidence 聚类。O(n²) 逐对比较。"""
-    clusters: list[list[dict]] = []
-    assigned: set[str] = set()
-
-    for i, ev_a in enumerate(evidences):
-        if ev_a["id"] in assigned:
-            continue
-        cluster = [ev_a]
-        assigned.add(ev_a["id"])
-        for ev_b in evidences[i + 1:]:
-            if ev_b["id"] in assigned:
-                continue
-            if _are_same_claim(ev_a, ev_b, llm):
-                cluster.append(ev_b)
-                assigned.add(ev_b["id"])
-        clusters.append(cluster)
+    # 未被任何 cluster 包含的 evidence 单独成簇
+    for ev in evidences:
+        if ev["id"] not in seen_in_clusters:
+            clusters.append([ev["id"]])
 
     return clusters
 
 
 def cross_validate_evidences(evidences: list[dict], llm: BaseChatModel) -> list[dict]:
-    """交叉验证入口：聚类 -> 跨 Agent 验证 -> 更新 confidence 和标记。
+    """交叉验证入口：批量语义聚类 → 跨 Agent 验证 → 更新 confidence。
 
-    对每个语义 cluster：
-    - 若包含 >= 2 个不同 Agent：按 Agent 数量提升 confidence（每个 Agent +0.05，最多 +0.2），
-      标记 cross_validated=True，记录 confirming_agents
-    - 若仅有 1 个 Agent：标记 cross_validated=False, source_bias=True
+    使用单次批量 LLM 调用对所有 evidence 进行语义聚类（O(1) API 调用），
+    然后对每个多 Agent 确认的 cluster 提升 confidence。
 
     Args:
-        evidences: evidence 字典列表，每项须包含 id, claim, source_agent, source_id
-        llm: 用于判断的 LLM 实例
+        evidences: evidence 字典列表
+        llm: LLM 实例
 
     Returns:
-        更新后的 evidence 列表（原位修改，原顺序不变）
+        更新后的 evidence 列表（原位修改）
     """
     if not evidences:
         return []
 
-    # 少于 2 条时无法交叉验证
     if len(evidences) < 2:
         for ev in evidences:
             ev["cross_validated"] = False
             ev["source_bias"] = True
         return evidences
 
-    clusters = _cluster_evidences(evidences, llm)
+    t0 = time.perf_counter()
 
-    for cluster in clusters:
-        agents = {ev.get("source_agent", "") for ev in cluster if ev.get("source_agent")}
+    # 限制参与聚类的 evidence 数量（取 confidence 最高的前 N 条）
+    sorted_evs = sorted(evidences, key=lambda e: e.get("confidence", 0), reverse=True)
+
+    if len(sorted_evs) > _MAX_EVIDENCES:
+        _get_console().print(
+            f"   ⚠️  交叉验证: {len(sorted_evs)} 条过多 → 取前 {_MAX_EVIDENCES} 条高置信度 evidence"
+        )
+        to_validate = sorted_evs[:_MAX_EVIDENCES]
+        rest = sorted_evs[_MAX_EVIDENCES:]
+        # 未参与验证的标记为 solo
+        for ev in rest:
+            ev["cross_validated"] = False
+            ev["source_bias"] = True
+    else:
+        to_validate = sorted_evs
+        rest = []
+
+    # 一次批量 LLM 调用进行语义聚类
+    _get_console().print(f"   🔬 交叉验证: {len(to_validate)} 条批量聚类中...")
+    clusters = _batch_cluster(to_validate, llm)
+
+    # 应用 confidence 调整
+    for cluster_ids in clusters:
+        cluster_evs = [ev for ev in to_validate if ev["id"] in cluster_ids]
+        if not cluster_evs:
+            continue
+
+        agents = {ev.get("source_agent", "") for ev in cluster_evs if ev.get("source_agent")}
         if len(agents) >= 2:
             boost = min(_BOOST_PER_AGENT * len(agents), _MAX_CONFIDENCE_BOOST)
-            for ev in cluster:
+            for ev in cluster_evs:
                 ev["confidence"] = min(ev.get("confidence", 0) + boost, _MAX_CONFIDENCE)
                 ev["cross_validated"] = True
                 ev["confirming_agents"] = sorted(agents)
         else:
-            for ev in cluster:
+            for ev in cluster_evs:
                 ev["cross_validated"] = False
                 ev["source_bias"] = True
 
-    return evidences
+    # 合并回完整列表
+    result = to_validate + rest
+
+    # 统计
+    cv_count = sum(1 for ev in result if ev.get("cross_validated"))
+    elapsed = time.perf_counter() - t0
+    logger.info(
+        "Cross-validate: %d/%d cross-validated in %d clusters (%.1fs)",
+        cv_count, len(result), len(clusters), elapsed,
+    )
+    _get_console().print(
+        f"   ✅ 交叉验证完成: {cv_count}/{len(result)} validated, {len(clusters)} clusters ({elapsed:.1f}s)"
+    )
+
+    return result
 
 
 def detect_conflicts(clusters: list[list[dict]], llm: BaseChatModel) -> list[dict]:
-    """冲突检测入口：对包含 >= 2 个不同 Agent 的 cluster 做矛盾分析。
+    """冲突检测入口：批量检测所有 cluster 中的矛盾。
 
-    每个符合条件的 cluster 调用 LLM 判断 claim 间是否存在矛盾，
-    解析 JSON 裁决 `{{"conflict": bool, "severity": "major"/"minor"/"none"}}`。
+    使用单次批量 LLM 调用检测所有符合条件的 cluster，
+    而非逐 cluster 调用。
 
     Args:
         clusters: 聚类后的 evidence 分组列表
-        llm: 用于判断的 LLM 实例
+        llm: LLM 实例
 
     Returns:
-        冲突列表，每项包含:
-        - topic: 代表该 cluster 的 claim
-        - positions: dict[source_agent -> claim]
-        - severity: "major" | "minor"
+        冲突列表
     """
-    conflicts: list[dict] = []
-
+    # 筛选出含 >=2 个不同 Agent 的 cluster
+    multi_agent_clusters = []
     for cluster in clusters:
         agents = {ev.get("source_agent", "") for ev in cluster if ev.get("source_agent")}
-        if len(agents) < 2:
-            continue
+        if len(agents) >= 2:
+            multi_agent_clusters.append(cluster)
 
-        claims_text = "\n".join(
-            f"- [{ev.get('source_agent', 'unknown')}]: {ev.get('claim', '')}"
-            for ev in cluster
-        )
-        prompt = _CONFLICT_DETECT_PROMPT.format(claims_text=claims_text)
+    if not multi_agent_clusters:
+        return []
 
-        try:
-            response = llm.invoke([SystemMessage(content=prompt)])
-            text = str(response.content).strip() if hasattr(response, "content") else ""
-            if not text:
-                logger.warning("Conflict detection LLM returned empty response, skipping cluster")
-                continue
-            verdict = json.loads(text)
-            if verdict.get("conflict") and verdict.get("severity", "none") != "none":
+    t0 = time.perf_counter()
+
+    # 构建批量 prompt
+    cluster_list = []
+    for ci, cluster in enumerate(multi_agent_clusters):
+        cluster_list.append({
+            "cluster_index": ci,
+            "claims": [
+                {"agent": ev.get("source_agent", "unknown"), "claim": ev.get("claim", "")[:200]}
+                for ev in cluster
+            ],
+        })
+
+    prompt = _BATCH_CONFLICT_PROMPT.format(
+        clusters_json=json.dumps(cluster_list, ensure_ascii=False)
+    )
+
+    conflicts: list[dict] = []
+    try:
+        response = llm.invoke([SystemMessage(content=prompt)])
+        text = str(response.content) if hasattr(response, "content") else str(response)
+
+        match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", text, re.DOTALL)
+        if match:
+            text = match.group(1).strip()
+
+        data = json.loads(text)
+        conflict_entries = data.get("conflicts", [])
+
+        for entry in conflict_entries:
+            ci = entry.get("cluster_index", -1)
+            if 0 <= ci < len(multi_agent_clusters):
+                cluster = multi_agent_clusters[ci]
                 conflicts.append({
                     "topic": cluster[0].get("claim", ""),
-                    "positions": {ev.get("source_agent", ""): ev.get("claim", "") for ev in cluster},
-                    "severity": verdict["severity"],
+                    "positions": {
+                        ev.get("source_agent", ""): ev.get("claim", "")
+                        for ev in cluster
+                    },
+                    "severity": entry.get("severity", "minor"),
                 })
-        except json.JSONDecodeError:
-            logger.warning("Conflict detection: failed to parse LLM response as JSON: %s", text)
-            continue
-        except Exception:
-            logger.warning("Conflict detection LLM call failed for cluster", exc_info=True)
-            continue
+    except json.JSONDecodeError:
+        logger.warning("Conflict detection: failed to parse LLM response as JSON")
+    except Exception:
+        logger.warning("Conflict detection LLM call failed", exc_info=True)
+
+    elapsed = time.perf_counter() - t0
+    if conflicts:
+        logger.info(
+            "Conflict detection: %d conflicts in %d clusters (%.1fs)",
+            len(conflicts), len(multi_agent_clusters), elapsed,
+        )
 
     return conflicts

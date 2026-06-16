@@ -1,5 +1,6 @@
 # deepresearch/nodes/merge.py
 import logging
+import time
 from typing import Any
 
 from langchain_core.language_models import BaseChatModel
@@ -132,14 +133,20 @@ def make_merge_node(llm: BaseChatModel):
         sources = list(state.get("sources", []))
         evidences = list(state.get("evidences", []))
 
+        t0 = time.perf_counter()
         logger.info(
-            "Merge: %d sources, %d evidences before dedup",
+            "[merge] 开始: %d sources, %d evidences",
             len(sources),
             len(evidences),
         )
+        print(f"\n🔗 Merge: {len(sources)} sources, {len(evidences)} evidences")
 
         # Stage 2a: 按 URL 去重 sources
+        before = len(sources)
         sources = _dedup_sources_by_url(sources)
+        url_dedup = before - len(sources)
+        if url_dedup:
+            print(f"   📋 URL 去重: {before} → {len(sources)} sources")
 
         # Stage 2b: LLM 语义去重 evidences
         if evidences:
@@ -149,10 +156,13 @@ def make_merge_node(llm: BaseChatModel):
         distinct_agents = {ev.get("source_agent") for ev in evidences if ev.get("source_agent")}
         conflicts: list[dict] = []
         if evidences and len(distinct_agents) >= 2:
+            print(f"   🔬 交叉验证: {len(evidences)} evidences, {len(distinct_agents)} agents")
             evidences = cross_validate_evidences(evidences, llm)
             # Stage 2d: 冲突检测
             clusters = _build_clusters_from_evidence(evidences)
             conflicts = detect_conflicts(clusters, llm)
+            if conflicts:
+                print(f"   ⚠️  冲突检测: {len(conflicts)} 处冲突")
 
         # Stage 2e: 权威度评分排序
         if sources:
@@ -161,13 +171,15 @@ def make_merge_node(llm: BaseChatModel):
         # Stage 3: 构建增强的 merge_summary
         merge_summary = _build_merge_summary(sources, evidences, conflicts=conflicts)
 
+        elapsed = time.perf_counter() - t0
         logger.info(
-            "Merge done: %d sources, %d evidences after dedup, "
-            "%d conflicts detected",
+            "[merge] 完成: %d sources, %d evidences, %d conflicts (%.1fs)",
             len(sources),
             len(evidences),
             len(conflicts),
+            elapsed,
         )
+        print(f"🔗 Merge: 完成 → {len(sources)} sources, {len(evidences)} evidences ({elapsed:.1f}s)")
 
         return {
             "sources": sources,

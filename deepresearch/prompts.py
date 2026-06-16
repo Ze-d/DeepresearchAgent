@@ -3,6 +3,33 @@ import json
 
 from langchain_core.messages import SystemMessage
 
+# 防止 context overflow 的令牌安全上限
+_MAX_EVIDENCES_IN_PROMPT = 60
+_MAX_SOURCES_IN_PROMPT = 40
+_MAX_CONTENT_LENGTH = 200  # source.content 截断到 200 字符
+
+
+def _safe_sources(sources: list[dict]) -> list[dict]:
+    """剥离 source.content 并限制数量，防止 prompt 超出 LLM context 限制。"""
+    trimmed = []
+    for src in sources[:_MAX_SOURCES_IN_PROMPT]:
+        s = {k: v for k, v in src.items() if k != "content"}
+        trimmed.append(s)
+    return trimmed
+
+
+def _safe_evidences(evidences: list[dict]) -> list[dict]:
+    """限制 evidence 数量，截断过长的 claim/quote。"""
+    trimmed = []
+    for ev in evidences[:_MAX_EVIDENCES_IN_PROMPT]:
+        e = dict(ev)
+        if len(e.get("claim", "")) > 500:
+            e["claim"] = e["claim"][:500] + "..."
+        if len(e.get("quote", "") or "") > 300:
+            e["quote"] = (e["quote"] or "")[:300] + "..."
+        trimmed.append(e)
+    return trimmed
+
 
 def build_planner_messages(user_query: str) -> list[SystemMessage]:
     """构建 Planner Prompt。"""
@@ -80,6 +107,7 @@ def build_summarizer_messages(
     evidences: list[dict],
 ) -> list[SystemMessage]:
     """构建 Summary Prompt。"""
+    safe_ev = _safe_evidences(evidences)
     text = f"""你是一个研究总结 Agent。
 
 用户问题：
@@ -88,8 +116,8 @@ def build_summarizer_messages(
 研究计划：
 {json.dumps(research_plan, ensure_ascii=False, indent=2)}
 
-证据列表：
-{json.dumps(evidences, ensure_ascii=False, indent=2)}
+证据列表（{len(safe_ev)}/{len(evidences)} 条）：
+{json.dumps(safe_ev, ensure_ascii=False, indent=2)}
 
 任务：
 生成阶段性研究总结。
@@ -113,6 +141,8 @@ def build_critique_messages(
     prev_critique: dict | None = None,
 ) -> list[SystemMessage]:
     """构建增强版 Critique Prompt（v1: 三维度评分 + fix rate 追踪）。"""
+    safe_src = _safe_sources(sources)
+    safe_ev = _safe_evidences(evidences)
     prev_section = ""
     if prev_critique:
         prev_issues = json.dumps(prev_critique.get("issues", []), ensure_ascii=False, indent=2)
@@ -131,11 +161,11 @@ Issues: {prev_issues}
 当前总结：
 {draft_summary}
 
-来源：
-{json.dumps(sources, ensure_ascii=False, indent=2)}
+来源（{len(safe_src)}/{len(sources)}条，已剥离正文）：
+{json.dumps(safe_src, ensure_ascii=False, indent=2)}
 
-证据：
-{json.dumps(evidences, ensure_ascii=False, indent=2)}
+证据（{len(safe_ev)}/{len(evidences)} 条）：
+{json.dumps(safe_ev, ensure_ascii=False, indent=2)}
 {prev_section}
 
 任务：
@@ -175,6 +205,7 @@ def build_finalizer_messages(
     sources: list[dict],
 ) -> list[SystemMessage]:
     """构建 Finalizer Prompt。"""
+    safe_src = _safe_sources(sources)
     text = f"""你是一个专业技术报告写作 Agent。
 
 用户问题：
@@ -186,8 +217,8 @@ def build_finalizer_messages(
 Critique 结果：
 {json.dumps(critique_result, ensure_ascii=False, indent=2)}
 
-来源：
-{json.dumps(sources, ensure_ascii=False, indent=2)}
+来源（{len(safe_src)}/{len(sources)}条，已剥离正文）：
+{json.dumps(safe_src, ensure_ascii=False, indent=2)}
 
 任务：
 生成最终中文 Markdown 报告。

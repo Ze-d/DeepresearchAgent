@@ -13,6 +13,7 @@
 - [v2.1 Multi-Agent Design](superpowers/specs/2026-06-15-v2.1-multi-agent-design.md) — 多 Agent 并发研究设计文档
 - [v2.1 Tradeoff Analysis](superpowers/specs/2026-06-15-v2.1-tradeoff-analysis.md) — 方案选型与权衡分析
 - [v2.1 Implementation Plan](superpowers/plans/2026-06-15-v2.1-implementation.md) — v2.1 实施计划（Task 21–23）
+- [v2.1 HITL Completion](specs/v2.1-hitl-completion.md) — HITL 完整实现计划（interrupt/resume 对接、Server/CLI 双模式）
 
 ## Architecture (架构设计)
 

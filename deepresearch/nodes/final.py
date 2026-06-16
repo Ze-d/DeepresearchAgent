@@ -1,5 +1,6 @@
 # deepresearch/nodes/final.py
 import logging
+import time
 
 from langchain_core.language_models import BaseChatModel
 
@@ -13,7 +14,11 @@ def make_final_node(llm: BaseChatModel):
     """创建 final_node（闭包注入 LLM）。"""
 
     def final_node(state: AgentState) -> dict:
-        logger.info("Final node: generating report")
+        t0 = time.perf_counter()
+        iteration = state.get("iteration", 0)
+        logger.info("[final] 开始: iteration=%d", iteration)
+        print(f"\n📄 Final: 正在生成最终报告 (iteration {iteration})...")
+
         messages = build_finalizer_messages(
             user_query=state["user_query"],
             draft_summary=state.get("draft_summary") or "",
@@ -32,7 +37,13 @@ def make_final_node(llm: BaseChatModel):
             validated = validate_citations(citations, state.get("sources", []))
             report = merge_citations_into_report(report, validated)
 
-        # Return with citations in state
+        elapsed = time.perf_counter() - t0
+        logger.info(
+            "[final] 完成: %d 字符, %d citations (%.1fs)",
+            len(report), len(citations or []), elapsed,
+        )
+        print(f"📄 Final: 完成 → {len(report)} 字符, {len(citations or [])} citations ({elapsed:.1f}s)")
+
         return {
             "final_report": report,
             "status": "completed",

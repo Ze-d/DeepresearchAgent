@@ -19,7 +19,8 @@ class TestAgentProfile:
         from deepresearch.nodes.research_agent import AGENT_PROFILES
         paper = AGENT_PROFILES["paper"]
         assert paper.name == "学术论文 Agent"
-        assert "site:arxiv.org" in paper.search_modifiers
+        # DuckDuckGo 仅支持单 site: — modifier 存储纯域名，不含 site: 前缀
+        assert "arxiv.org" in paper.search_modifiers
         assert len(paper.system_prompt) > 0
         assert len(paper.evidence_instruction) > 0
 
@@ -73,16 +74,17 @@ class TestResearchAgentNode:
         result = node(state)
         assert len(result["sources"]) > 0
         assert len(result["evidences"]) > 0
-        assert result["agent_profile"] == "paper"
+        # agent_profile 不再返回 — 它是 Send API 注入的输入参数，多个并行 Agent
+        # 并发写入同一 key 会触发 InvalidUpdateError，且下游节点不需要此字段
 
     def test_research_agent_search_modifiers_applied(self, monkeypatch):
-        """research_agent 将 profile 的 search_modifiers 追加到搜索查询"""
+        """research_agent 将 profile 的 search_modifiers 作为 site_filter 传递给 search_web"""
         from deepresearch.nodes.research_agent import make_research_agent
 
-        searched_queries = []
+        searched_calls = []
 
         def mock_search(query, max_results=5, site_filter=None):
-            searched_queries.append(query)
+            searched_calls.append({"query": query, "site_filter": site_filter})
             return []
 
         monkeypatch.setattr("deepresearch.nodes.research_agent.search_web", mock_search)
@@ -107,9 +109,9 @@ class TestResearchAgentNode:
             },
         }
         node(state)
-        assert len(searched_queries) > 0
-        query = searched_queries[0]
-        assert "transformer architecture" in query
-        # Paper agent modifiers should be appended
-        assert "site:arxiv.org" in query
-        assert "site:scholar.google.com" in query
+        assert len(searched_calls) > 0
+        call = searched_calls[0]
+        assert "transformer architecture" in call["query"]
+        # site_filter 作为独立参数传递，不在 query 中
+        assert "site:" not in call["query"]
+        assert call["site_filter"] == "arxiv.org"

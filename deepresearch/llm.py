@@ -22,4 +22,5 @@ def build_llm() -> BaseChatModel:
         model=cfg.deepseek_model,
         temperature=cfg.temperature,
         max_retries=cfg.max_retries,
+        request_timeout=cfg.llm_request_timeout,
     )

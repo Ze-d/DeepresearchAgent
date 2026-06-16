@@ -121,13 +121,7 @@ def make_research_node(llm: BaseChatModel):
                         "title": r.title,
                     })
 
-        # v1: 对 evidences 做语义去重
-        if all_evidences:
-            _get_console().print(f"   🔄 语义去重: {len(all_evidences)} 条证据...")
-            from deepresearch.evidence.dedup import deduplicate_evidences
-            all_evidences = deduplicate_evidences(all_evidences, llm)
-            _get_console().print(f"       去重后: {len(all_evidences)} 条证据")
-
+        # v2.1: 语义去重已移至 merge 节点统一处理，避免多 Agent 场景下重复调用
         # v1: 对 sources 做权威度评分排序
         _get_console().print(f"   📊 来源评分排序: {len(all_sources)} 条来源...")
         from deepresearch.evidence.ranking import rank_sources

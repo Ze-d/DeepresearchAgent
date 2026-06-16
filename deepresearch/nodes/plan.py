@@ -2,6 +2,7 @@
 import json
 import logging
 import re
+import time
 
 from langchain_core.language_models import BaseChatModel
 from pydantic import ValidationError
@@ -76,15 +77,24 @@ def make_plan_node(llm: BaseChatModel):
 
     def plan_node(state: AgentState) -> dict:
         user_query = state["user_query"]
-        logger.info("Plan node: generating research plan for: %s", user_query)
+        t0 = time.perf_counter()
+        logger.info("[plan] 开始: %s", user_query[:80])
+        print("\n📋 Plan: 正在生成研究计划...")
 
         plan = _run_planner(user_query, llm)
 
         if plan is None:
+            elapsed = time.perf_counter() - t0
+            logger.error("[plan] 失败 (%.1fs)", elapsed)
             return {
                 "status": "error",
                 "errors": ["Plan generation failed: unable to parse LLM output as valid JSON."],
             }
+
+        elapsed = time.perf_counter() - t0
+        sq_count = len(plan.get("sub_questions", []))
+        logger.info("[plan] 完成: %d 个子问题 (%.1fs)", sq_count, elapsed)
+        print(f"📋 Plan: 完成 → {sq_count} 个子问题, {plan.get('expected_sections', [])}")
 
         return {
             "research_plan": plan,

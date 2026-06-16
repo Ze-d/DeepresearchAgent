@@ -71,7 +71,7 @@ def test_v1_dedup_defaults(monkeypatch):
     from deepresearch.config import Settings
     s = Settings()
     assert s.dedup_enabled is True
-    assert s.dedup_max_calls_per_run == 20
+    assert s.dedup_max_calls_per_run == 15
     assert s.source_ranking_enabled is True
     assert s.checkpoint_enabled is True
     assert s.stream_enabled is True
@@ -106,7 +106,7 @@ def test_v2_server_defaults(monkeypatch):
     from deepresearch.config import Settings
     s = Settings()
     assert s.server_host == "127.0.0.1"
-    assert s.server_port == 8000
+    assert s.server_port == 8620
     assert s.cors_origins == ["http://localhost:5173"]
 
 

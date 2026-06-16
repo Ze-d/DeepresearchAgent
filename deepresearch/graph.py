@@ -32,31 +32,34 @@ def route_after_critique(state: AgentState) -> str:
     max_iterations = state.get("max_iterations", 2)
 
     if critique.get("pass") is True:
-        logger.info("Critique passed (iteration %d/%d) → routing to final", iteration, max_iterations)
+        logger.info("[route] Critique passed (iteration %d/%d) → final", iteration, max_iterations)
+        print(f"\n✅ Critique: 通过 (iteration {iteration}/{max_iterations}) → 生成最终报告")
         return "final"
 
     if iteration >= max_iterations:
-        logger.info("Max iterations reached (%d/%d) → routing to final", iteration, max_iterations)
+        logger.info("[route] Max iterations reached (%d/%d) → final", iteration, max_iterations)
+        print(f"\n⏰ Max iterations ({max_iterations}) → 生成最终报告")
         return "final"
 
-    logger.info("Critique not passed (iteration %d/%d) → continuing research", iteration, max_iterations)
+    logger.info("[route] Critique not passed (iteration %d/%d) → re-research", iteration, max_iterations)
+    print(f"\n🔄 Critique: 不通过 (iteration {iteration}/{max_iterations}) → 追加研究")
     return "research_agent"
 
 
 def route_after_plan(state: AgentState) -> str:
     """Conditional routing: stop the workflow when planning failed."""
     if state.get("status") == "error" or not state.get("research_plan"):
-        logger.info("Planning failed → ending workflow")
+        logger.info("[route] Planning failed → ending workflow")
         return "end"
 
-    logger.info("Planning succeeded → routing to research_agent")
+    logger.info("[route] Planning succeeded → fan-out to research_agent")
     return "research_agent"
 
 
 def fanout_to_agents(state: AgentState) -> list[Send]:
     """根据每个 sub_question 的 source_types 创建并行 Send"""
     if state.get("status") == "error" or not state.get("research_plan"):
-        logger.info("Fan-out: plan error or missing → no Sends")
+        logger.info("[fan-out] Plan error or missing → no Sends")
         return []
     plan = state.get("research_plan") or {}
     sub_questions = plan.get("sub_questions", [])
@@ -64,6 +67,7 @@ def fanout_to_agents(state: AgentState) -> list[Send]:
     # Handle critique follow-up: route to all agents
     critique = state.get("critique_result") or {}
     if critique.get("pass") is False and critique.get("new_search_queries"):
+        logger.info("[fan-out] Critique follow-up with %d new queries", len(critique["new_search_queries"]))
         follow_up_sq = {
             "id": "critique_followup",
             "question": state.get("user_query", ""),
@@ -85,7 +89,7 @@ def fanout_to_agents(state: AgentState) -> list[Send]:
                              "priority": 1, "search_queries": [state["user_query"]],
                              "source_types": ["blog"]},
         }))
-    logger.info("Fan-out: %d Send(s) to research_agent", len(sends))
+    logger.info("[fan-out] %d Send(s) to research_agent", len(sends))
     return sends
 
 
@@ -98,7 +102,9 @@ def build_graph(llm: BaseChatModel | None = None) -> StateGraph:
     if llm is None:
         llm = build_llm()
 
-    logger.info("Building V2.1 StateGraph: plan → research_agent(×N) → merge → summary → critique")
+    logger.info(
+        "[graph] Building V2.1: plan → fan-out → research_agent(×N) → merge → human_review → summary → critique"
+    )
 
     graph = StateGraph(AgentState)
 

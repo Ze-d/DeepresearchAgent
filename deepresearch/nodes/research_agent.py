@@ -4,6 +4,7 @@
 import json
 import logging
 import re
+import time
 import uuid
 from dataclasses import dataclass, field
 from typing import Any
@@ -35,11 +36,13 @@ class AgentProfile:
 
 
 # ── 4 个内置 Agent Profile ──────────────────────────────────────────
+# 注意：DuckDuckGo 的 site: 操作符仅支持单个站点，因此每个 profile 只保留一个
+# 最有效的搜索修饰符。search_web 会将修饰符作为 site_filter 参数传递。
 
 AGENT_PROFILES: dict[str, AgentProfile] = {
     "paper": AgentProfile(
         name="学术论文 Agent",
-        search_modifiers=["site:arxiv.org", "site:scholar.google.com"],
+        search_modifiers=["arxiv.org"],
         system_prompt="你是一个学术研究分析专家，擅长从学术论文中提取关键发现和技术细节。",
         evidence_instruction=(
             "从学术角度分析，重点提取：研究方法、实验结果、关键技术指标、对比基线。"
@@ -47,7 +50,7 @@ AGENT_PROFILES: dict[str, AgentProfile] = {
     ),
     "github": AgentProfile(
         name="代码仓库 Agent",
-        search_modifiers=["site:github.com", "site:gitlab.com"],
+        search_modifiers=["github.com"],
         system_prompt="你是一个开源代码分析专家，擅长从代码仓库中提取架构设计、API 使用和工程实现细节。",
         evidence_instruction=(
             "从工程实践角度分析，重点提取：代码架构、核心实现、依赖关系、使用方式。"
@@ -55,7 +58,7 @@ AGENT_PROFILES: dict[str, AgentProfile] = {
     ),
     "blog": AgentProfile(
         name="技术博客 Agent",
-        search_modifiers=["site:medium.com", "site:dev.to"],
+        search_modifiers=["medium.com"],
         system_prompt="你是一个技术博客分析专家，擅长从技术文章中提取实践经验和最佳实践。",
         evidence_instruction=(
             "从实践经验角度分析，重点提取：技术选型考量、踩坑记录、性能对比、实施步骤。"
@@ -63,7 +66,7 @@ AGENT_PROFILES: dict[str, AgentProfile] = {
     ),
     "docs": AgentProfile(
         name="文档 Agent",
-        search_modifiers=["site:docs.python.org", "site:developer.mozilla.org"],
+        search_modifiers=[""],
         system_prompt="你是一个技术文档分析专家，擅长从官方文档中提取准确的 API 定义、配置说明和使用指南。",
         evidence_instruction=(
             "从文档角度分析，重点提取：API 签名、配置参数、返回值说明、最佳实践示例。"
@@ -143,17 +146,23 @@ def make_research_agent(llm: BaseChatModel):
                 "errors": ["No sub_question found in state."],
             }
 
+        t0 = time.perf_counter()
+        sq_text = sub_question.get("question", "")[:60]
+        logger.info("[research_agent:%s] 开始: %s", profile_key, sq_text)
+        print(f"\n🔬 ResearchAgent[{profile.name}]: 搜索中...")
+
         all_sources: list[dict] = []
         all_evidences: list[dict] = []
         all_search_results: list[dict] = []
 
         queries = sub_question.get("search_queries", [])
         for query in queries[:2]:
-            # 用 profile 的 search_modifiers 增强搜索查询
-            modifiers = profile.search_modifiers[:2]
-            enhanced_query = f"{query} {' '.join(modifiers)}" if modifiers else query
+            # 取 profile 的第一个 search_modifier 作为 site_filter
+            # DuckDuckGo 仅支持单个 site: 操作符
+            site_filter = profile.search_modifiers[0] if profile.search_modifiers else None
 
-            results = search_web(enhanced_query, max_results=5)
+            results = search_web(query, max_results=5, site_filter=site_filter if site_filter else None)
+            print(f"   🔎 [{profile.name}] 搜索: {query}{' site:' + site_filter if site_filter else ''} → {len(results)} 条")
             for r in results:
                 source_id = str(uuid.uuid4())[:8]
                 source_dict: dict[str, Any] = {
@@ -182,25 +191,33 @@ def make_research_agent(llm: BaseChatModel):
                         ev["source_agent"] = profile_key
                         all_evidences.append(ev)
 
-                all_sources.append(source_dict)
+                    all_sources.append(source_dict)
+                    print(f"   📄 [{profile.name}] {r.url[:60]} → {len(evidences)} 条证据")
+                else:
+                    logger.debug(
+                        "Skipping source %s: content fetch returned empty",
+                        r.url,
+                    )
                 all_search_results.append({
                     "query": query,
                     "url": r.url,
                     "title": r.title,
                 })
 
+        elapsed = time.perf_counter() - t0
         logger.info(
-            "ResearchAgent[%s] done: %d sources, %d evidences",
+            "[research_agent:%s] 完成: %d sources, %d evidences (%.1fs)",
             profile_key,
             len(all_sources),
             len(all_evidences),
+            elapsed,
         )
 
+        # 只返回本 Agent 新发现的条目；operator.add reducer 负责跨 Agent 累积
         return {
-            "search_results": state.get("search_results", []) + all_search_results,
-            "sources": state.get("sources", []) + all_sources,
-            "evidences": state.get("evidences", []) + all_evidences,
-            "agent_profile": profile_key,
+            "search_results": all_search_results,
+            "sources": all_sources,
+            "evidences": all_evidences,
         }
 
     return research_agent
